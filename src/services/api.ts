@@ -1,6 +1,8 @@
 import { User, Bet, ParsedBet, ParsingRule, SummaryItem } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// Use relative URL in production (Vercel), absolute URL in development
+const API_BASE_URL = import.meta.env.VITE_API_URL || 
+  (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api');
 
 // Helper function to check if response is JSON
 async function parseJSONResponse(response: Response) {

@@ -2,51 +2,33 @@
 require('dotenv').config();
 
 const express = require('express');
-const { MongoClient, ObjectId } = require('mongodb');
+const { ObjectId } = require('mongodb');
 const cors = require('cors');
+const { connectToMongoDB } = require('./db');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
-
-// MongoDB connection string from environment variables
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://td_db_user:td00000000@cluster0.zhzkjdp.mongodb.net/';
-const DB_NAME = process.env.DB_NAME || 'td';
-const COLLECTION_NAME = process.env.COLLECTION_NAME || 'td1';
-
-// Validate required environment variables
-if (!MONGODB_URI) {
-  console.error('❌ Error: MONGODB_URI is not set in environment variables');
-  console.error('Please create a .env file with MONGODB_URI=your_connection_string');
-  process.exit(1);
-}
-
-let db;
-let collection;
-let rulesCollection;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
-async function connectToMongoDB() {
+// Middleware to ensure MongoDB connection for each request
+app.use(async (req, res, next) => {
   try {
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    db = client.db(DB_NAME);
-    collection = db.collection(COLLECTION_NAME);
-    rulesCollection = db.collection('parsing_rules');
-    console.log('✅ Connected to MongoDB');
+    const { collection, rulesCollection } = await connectToMongoDB();
+    req.collection = collection;
+    req.rulesCollection = rulesCollection;
+    next();
   } catch (error) {
-    console.error('❌ MongoDB connection error:', error);
-    process.exit(1);
+    console.error('MongoDB connection error in middleware:', error);
+    res.status(500).json({ error: 'Database connection failed' });
   }
-}
+});
 
 // GET - Get all users
 app.get('/api/users', async (req, res) => {
   try {
-    const users = await collection.find({}).toArray();
+    const users = await req.collection.find({}).toArray();
     // Ensure all users have required fields
     const normalizedUsers = users.map(user => ({
       _id: user._id,
@@ -64,7 +46,7 @@ app.get('/api/users', async (req, res) => {
 // GET - Get single user
 app.get('/api/users/:userId', async (req, res) => {
   try {
-    const user = await collection.findOne({ _id: req.params.userId });
+    const user = await req.collection.findOne({ _id: req.params.userId });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -91,7 +73,7 @@ app.post('/api/users', async (req, res) => {
     }
 
     const userName = name.trim();
-    const existing = await collection.findOne({ _id: userName });
+    const existing = await req.collection.findOne({ _id: userName });
     if (existing) {
       return res.status(400).json({ error: 'User already exists' });
     }
@@ -104,7 +86,7 @@ app.post('/api/users', async (req, res) => {
       updatedAt: now,
     };
 
-    await collection.insertOne(newUser);
+    await req.collection.insertOne(newUser);
     res.json(newUser);
   } catch (error) {
     console.error('Error creating user:', error);
@@ -115,7 +97,7 @@ app.post('/api/users', async (req, res) => {
 // DELETE - Delete user
 app.delete('/api/users/:userId', async (req, res) => {
   try {
-    const result = await collection.deleteOne({ _id: req.params.userId });
+    const result = await req.collection.deleteOne({ _id: req.params.userId });
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -134,7 +116,7 @@ app.post('/api/users/:userId/bets', async (req, res) => {
       return res.status(400).json({ error: 'Bets must be an array' });
     }
 
-    const user = await collection.findOne({ _id: req.params.userId });
+    const user = await req.collection.findOne({ _id: req.params.userId });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -147,7 +129,7 @@ app.post('/api/users/:userId/bets', async (req, res) => {
     }));
 
     const updatedBets = [...user.bets, ...newBets];
-    await collection.updateOne(
+    await req.collection.updateOne(
       { _id: req.params.userId },
       {
         $set: {
@@ -168,7 +150,7 @@ app.post('/api/users/:userId/bets', async (req, res) => {
 app.put('/api/users/:userId/bets/:betId', async (req, res) => {
   try {
     const { number, amount, message } = req.body;
-    const user = await collection.findOne({ _id: req.params.userId });
+    const user = await req.collection.findOne({ _id: req.params.userId });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -185,7 +167,7 @@ app.put('/api/users/:userId/bets/:betId', async (req, res) => {
       message: message || user.bets[betIndex].message,
     };
 
-    await collection.updateOne(
+    await req.collection.updateOne(
       { _id: req.params.userId },
       {
         $set: {
@@ -205,13 +187,13 @@ app.put('/api/users/:userId/bets/:betId', async (req, res) => {
 // DELETE - Delete bet
 app.delete('/api/users/:userId/bets/:betId', async (req, res) => {
   try {
-    const user = await collection.findOne({ _id: req.params.userId });
+    const user = await req.collection.findOne({ _id: req.params.userId });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     const updatedBets = user.bets.filter(b => b._id !== req.params.betId);
-    await collection.updateOne(
+    await req.collection.updateOne(
       { _id: req.params.userId },
       {
         $set: {
@@ -238,7 +220,7 @@ app.get('/api/summary', async (req, res) => {
       query._id = userId;
     }
 
-    const users = await collection.find(query).toArray();
+    const users = await req.collection.find(query).toArray();
     const now = new Date();
     const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
     const end = endDate ? new Date(endDate) : new Date();
@@ -273,7 +255,7 @@ app.get('/api/summary', async (req, res) => {
 // GET - Get all parsing rules
 app.get('/api/parsing-rules', async (req, res) => {
   try {
-    const rules = await rulesCollection.find({}).toArray();
+    const rules = await req.rulesCollection.find({}).toArray();
     res.json(rules);
   } catch (error) {
     console.error('Error fetching parsing rules:', error);
@@ -297,8 +279,8 @@ app.post('/api/parsing-rules', async (req, res) => {
       updatedAt: now,
     };
 
-    const result = await rulesCollection.insertOne(newRule);
-    const insertedRule = await rulesCollection.findOne({ _id: result.insertedId });
+    const result = await req.rulesCollection.insertOne(newRule);
+    const insertedRule = await req.rulesCollection.findOne({ _id: result.insertedId });
     res.json(insertedRule);
   } catch (error) {
     console.error('Error creating parsing rule:', error);
@@ -318,7 +300,7 @@ app.put('/api/parsing-rules/:ruleId', async (req, res) => {
     if (name) updateData.name = name.trim();
     if (numbers && Array.isArray(numbers)) updateData.numbers = numbers;
 
-    const result = await rulesCollection.updateOne(
+    const result = await req.rulesCollection.updateOne(
       { _id: new ObjectId(ruleId) },
       { $set: updateData }
     );
@@ -327,7 +309,7 @@ app.put('/api/parsing-rules/:ruleId', async (req, res) => {
       return res.status(404).json({ error: 'Parsing rule not found' });
     }
 
-    const updatedRule = await rulesCollection.findOne({ _id: new ObjectId(ruleId) });
+    const updatedRule = await req.rulesCollection.findOne({ _id: new ObjectId(ruleId) });
     res.json(updatedRule);
   } catch (error) {
     console.error('Error updating parsing rule:', error);
@@ -339,7 +321,7 @@ app.put('/api/parsing-rules/:ruleId', async (req, res) => {
 app.delete('/api/parsing-rules/:ruleId', async (req, res) => {
   try {
     const { ruleId } = req.params;
-    const result = await rulesCollection.deleteOne({ _id: new ObjectId(ruleId) });
+    const result = await req.rulesCollection.deleteOne({ _id: new ObjectId(ruleId) });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'Parsing rule not found' });
@@ -353,8 +335,13 @@ app.delete('/api/parsing-rules/:ruleId', async (req, res) => {
 });
 
 // Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', database: db ? 'connected' : 'disconnected' });
+app.get('/api/health', async (req, res) => {
+  try {
+    await connectToMongoDB();
+    res.json({ status: 'ok', database: 'connected' });
+  } catch (error) {
+    res.json({ status: 'ok', database: 'disconnected', error: error.message });
+  }
 });
 
 // Catch-all route for undefined API endpoints
@@ -371,13 +358,22 @@ app.use((req, res) => {
   }
 });
 
-// Start server
-async function startServer() {
-  await connectToMongoDB();
+// Export app for Vercel serverless functions
+module.exports = app;
 
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-  });
+// Start server only if running locally (not in Vercel)
+if (require.main === module) {
+  const PORT = process.env.PORT || 3001;
+  async function startServer() {
+    try {
+      await connectToMongoDB();
+      app.listen(PORT, () => {
+        console.log(`🚀 Server running on http://localhost:${PORT}`);
+      });
+    } catch (error) {
+      console.error('Failed to start server:', error);
+      process.exit(1);
+    }
+  }
+  startServer();
 }
-
-startServer();
