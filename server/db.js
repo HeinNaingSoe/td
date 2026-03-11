@@ -9,6 +9,7 @@ let cachedClient = null;
 let cachedDb = null;
 let cachedCollection = null;
 let cachedRulesCollection = null;
+let cachedStringConversionCollection = null;
 
 async function connectToMongoDB() {
   // Reuse existing connection if available (for serverless)
@@ -18,6 +19,7 @@ async function connectToMongoDB() {
       db: cachedDb,
       collection: cachedCollection,
       rulesCollection: cachedRulesCollection,
+      stringConversionCollection: cachedStringConversionCollection,
     };
   }
 
@@ -32,11 +34,13 @@ async function connectToMongoDB() {
     const db = client.db(DB_NAME);
     const collection = db.collection(COLLECTION_NAME);
     const rulesCollection = db.collection('parsing_rules');
+    const stringConversionCollection = db.collection('string_conversion');
 
     cachedClient = client;
     cachedDb = db;
     cachedCollection = collection;
     cachedRulesCollection = rulesCollection;
+    cachedStringConversionCollection = stringConversionCollection;
 
     console.log('✅ Connected to MongoDB');
     return {
@@ -44,6 +48,7 @@ async function connectToMongoDB() {
       db,
       collection,
       rulesCollection,
+      stringConversionCollection,
     };
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);

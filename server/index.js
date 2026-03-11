@@ -15,9 +15,10 @@ app.use(express.json());
 // Middleware to ensure MongoDB connection for each request
 app.use(async (req, res, next) => {
   try {
-    const { collection, rulesCollection } = await connectToMongoDB();
+    const { collection, rulesCollection, stringConversionCollection } = await connectToMongoDB();
     req.collection = collection;
     req.rulesCollection = rulesCollection;
+    req.stringConversionCollection = stringConversionCollection;
     next();
   } catch (error) {
     console.error('MongoDB connection error in middleware:', error);
@@ -331,6 +332,90 @@ app.delete('/api/parsing-rules/:ruleId', async (req, res) => {
   } catch (error) {
     console.error('Error deleting parsing rule:', error);
     res.status(500).json({ error: 'Failed to delete parsing rule' });
+  }
+});
+
+// GET - Get all string conversion rules
+app.get('/api/string-conversion', async (req, res) => {
+  try {
+    const rules = await req.stringConversionCollection.find({}).toArray();
+    res.json(rules);
+  } catch (error) {
+    console.error('Error fetching string conversion rules:', error);
+    res.status(500).json({ error: 'Failed to fetch string conversion rules' });
+  }
+});
+
+// POST - Create string conversion rule
+app.post('/api/string-conversion', async (req, res) => {
+  try {
+    const { from, to, enabled } = req.body;
+    if (!from || from.trim() === '') {
+      return res.status(400).json({ error: 'From string is required' });
+    }
+
+    const now = new Date().toISOString();
+    const newRule = {
+      from: from.trim(),
+      to: to || '',
+      enabled: enabled !== undefined ? enabled : true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const result = await req.stringConversionCollection.insertOne(newRule);
+    const insertedRule = await req.stringConversionCollection.findOne({ _id: result.insertedId });
+    res.json(insertedRule);
+  } catch (error) {
+    console.error('Error creating string conversion rule:', error);
+    res.status(500).json({ error: 'Failed to create string conversion rule' });
+  }
+});
+
+// PUT - Update string conversion rule
+app.put('/api/string-conversion/:ruleId', async (req, res) => {
+  try {
+    const { ruleId } = req.params;
+    const { from, to, enabled } = req.body;
+
+    const updateData = {
+      updatedAt: new Date().toISOString(),
+    };
+    if (from !== undefined) updateData.from = from.trim();
+    if (to !== undefined) updateData.to = to || '';
+    if (enabled !== undefined) updateData.enabled = enabled;
+
+    const result = await req.stringConversionCollection.updateOne(
+      { _id: new ObjectId(ruleId) },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'String conversion rule not found' });
+    }
+
+    const updatedRule = await req.stringConversionCollection.findOne({ _id: new ObjectId(ruleId) });
+    res.json(updatedRule);
+  } catch (error) {
+    console.error('Error updating string conversion rule:', error);
+    res.status(500).json({ error: 'Failed to update string conversion rule' });
+  }
+});
+
+// DELETE - Delete string conversion rule
+app.delete('/api/string-conversion/:ruleId', async (req, res) => {
+  try {
+    const { ruleId } = req.params;
+    const result = await req.stringConversionCollection.deleteOne({ _id: new ObjectId(ruleId) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'String conversion rule not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting string conversion rule:', error);
+    res.status(500).json({ error: 'Failed to delete string conversion rule' });
   }
 });
 

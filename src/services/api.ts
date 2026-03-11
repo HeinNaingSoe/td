@@ -1,4 +1,4 @@
-import { User, Bet, ParsedBet, ParsingRule, SummaryItem } from '../types';
+import { User, Bet, ParsedBet, ParsingRule, SummaryItem, ConversionRule } from '../types';
 
 // Use relative URL in production (Vercel), absolute URL in development
 const API_BASE_URL = import.meta.env.VITE_API_URL || 
@@ -225,6 +225,92 @@ export async function deleteParsingRule(ruleId: string): Promise<void> {
         throw new Error(`Failed to delete parsing rule. Server returned status ${response.status}`);
       });
       throw new Error(error.error || 'Failed to delete parsing rule');
+    }
+  } catch (error: any) {
+    if (error.message.includes('fetch')) {
+      throw new Error(`Cannot connect to backend server. Please make sure the server is running.`);
+    }
+    throw error;
+  }
+}
+
+// String Conversion Rules
+export async function getStringConversionRules(): Promise<ConversionRule[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/string-conversion`);
+    if (!response.ok) {
+      const error = await parseJSONResponse(response).catch(() => {
+        throw new Error(`Failed to fetch string conversion rules. Server returned status ${response.status}`);
+      });
+      throw new Error(error.error || 'Failed to fetch string conversion rules');
+    }
+    return parseJSONResponse(response);
+  } catch (error: any) {
+    if (error.message.includes('fetch')) {
+      throw new Error(`Cannot connect to backend server. Please make sure the server is running.`);
+    }
+    throw error;
+  }
+}
+
+export async function createStringConversionRule(rule: Omit<ConversionRule, '_id' | 'createdAt' | 'updatedAt'>): Promise<ConversionRule> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/string-conversion`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(rule),
+    });
+    if (!response.ok) {
+      const error = await parseJSONResponse(response).catch(() => {
+        throw new Error(`Failed to create string conversion rule. Server returned status ${response.status}`);
+      });
+      throw new Error(error.error || 'Failed to create string conversion rule');
+    }
+    return parseJSONResponse(response);
+  } catch (error: any) {
+    if (error.message.includes('fetch')) {
+      throw new Error(`Cannot connect to backend server. Please make sure the server is running.`);
+    }
+    throw error;
+  }
+}
+
+export async function updateStringConversionRule(ruleId: string, rule: Partial<ConversionRule>): Promise<ConversionRule> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/string-conversion/${ruleId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(rule),
+    });
+    if (!response.ok) {
+      const error = await parseJSONResponse(response).catch(() => {
+        throw new Error(`Failed to update string conversion rule. Server returned status ${response.status}`);
+      });
+      throw new Error(error.error || 'Failed to update string conversion rule');
+    }
+    return parseJSONResponse(response);
+  } catch (error: any) {
+    if (error.message.includes('fetch')) {
+      throw new Error(`Cannot connect to backend server. Please make sure the server is running.`);
+    }
+    throw error;
+  }
+}
+
+export async function deleteStringConversionRule(ruleId: string): Promise<void> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/string-conversion/${ruleId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const error = await parseJSONResponse(response).catch(() => {
+        throw new Error(`Failed to delete string conversion rule. Server returned status ${response.status}`);
+      });
+      throw new Error(error.error || 'Failed to delete string conversion rule');
     }
   } catch (error: any) {
     if (error.message.includes('fetch')) {

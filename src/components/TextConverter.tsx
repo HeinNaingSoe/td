@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-
-interface ConversionRule {
-  id: string;
-  from: string;
-  to: string;
-  enabled: boolean;
-}
+import React, { useState, useEffect, useRef } from 'react';
+import { ConversionRule } from '../types';
+import {
+  getStringConversionRules,
+  createStringConversionRule,
+  updateStringConversionRule,
+  deleteStringConversionRule,
+} from '../services/api';
 
 export const TextConverter: React.FC = () => {
   const [rules, setRules] = useState<ConversionRule[]>([]);
@@ -13,25 +13,27 @@ export const TextConverter: React.FC = () => {
   const [outputText, setOutputText] = useState('');
   const [newRuleFrom, setNewRuleFrom] = useState('');
   const [newRuleTo, setNewRuleTo] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const updateTimeoutRef = useRef<Record<string, number>>({});
 
-  // Load rules from localStorage on mount
+  // Load rules from MongoDB on mount
   useEffect(() => {
-    const savedRules = localStorage.getItem('textConverterRules');
-    if (savedRules) {
-      try {
-        setRules(JSON.parse(savedRules));
-      } catch (error) {
-        console.error('Failed to load conversion rules:', error);
-      }
-    }
+    loadRules();
   }, []);
 
-  // Save rules to localStorage whenever rules change
-  useEffect(() => {
-    if (rules.length > 0) {
-      localStorage.setItem('textConverterRules', JSON.stringify(rules));
+  const loadRules = async () => {
+    try {
+      setLoading(true);
+      const data = await getStringConversionRules();
+      setRules(data || []);
+    } catch (error) {
+      console.error('Failed to load conversion rules:', error);
+      alert('Failed to load conversion rules. Please check if the backend server is running.');
+    } finally {
+      setLoading(false);
     }
-  }, [rules]);
+  };
 
   // Apply conversions whenever input or rules change
   useEffect(() => {
@@ -58,45 +60,99 @@ export const TextConverter: React.FC = () => {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   };
 
-  const handleAddRule = () => {
+  const handleAddRule = async () => {
     if (!newRuleFrom.trim()) {
       alert('Please enter a "From" string');
       return;
     }
 
-    const newRule: ConversionRule = {
-      id: Date.now().toString(),
-      from: newRuleFrom.trim(),
-      to: newRuleTo.trim(),
-      enabled: true,
-    };
-
-    setRules([...rules, newRule]);
-    setNewRuleFrom('');
-    setNewRuleTo('');
-  };
-
-  const handleDeleteRule = (id: string) => {
-    if (confirm('Are you sure you want to delete this conversion rule?')) {
-      setRules(rules.filter(rule => rule.id !== id));
+    setSaving(true);
+    try {
+      const newRule = await createStringConversionRule({
+        from: newRuleFrom.trim(),
+        to: newRuleTo.trim(),
+        enabled: true,
+      });
+      setRules([...rules, newRule]);
+      setNewRuleFrom('');
+      setNewRuleTo('');
+    } catch (error: any) {
+      alert(error.message || 'Failed to add conversion rule');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleToggleRule = (id: string) => {
-    setRules(
-      rules.map(rule =>
-        rule.id === id ? { ...rule, enabled: !rule.enabled } : rule
-      )
-    );
+  const handleDeleteRule = async (ruleId: string) => {
+    if (!ruleId || !confirm('Are you sure you want to delete this conversion rule?')) {
+      return;
+    }
+
+    try {
+      await deleteStringConversionRule(ruleId);
+      setRules(rules.filter(rule => rule._id !== ruleId));
+    } catch (error: any) {
+      alert(error.message || 'Failed to delete conversion rule');
+    }
   };
 
-  const handleUpdateRule = (id: string, field: 'from' | 'to', value: string) => {
+  const handleToggleRule = async (ruleId: string) => {
+    if (!ruleId) return;
+
+    const rule = rules.find(r => r._id === ruleId);
+    if (!rule) return;
+
+    try {
+      const updatedRule = await updateStringConversionRule(ruleId, {
+        enabled: !rule.enabled,
+      });
+      setRules(
+        rules.map(r => (r._id === ruleId ? updatedRule : r))
+      );
+    } catch (error: any) {
+      alert(error.message || 'Failed to update conversion rule');
+    }
+  };
+
+  const handleUpdateRule = (ruleId: string, field: 'from' | 'to', value: string) => {
+    if (!ruleId) return;
+
+    // Update local state immediately for responsive UI
     setRules(
-      rules.map(rule =>
-        rule.id === id ? { ...rule, [field]: value } : rule
+      rules.map(rule => 
+        rule._id === ruleId ? { ...rule, [field]: value } : rule
       )
     );
+
+    // Clear existing timeout for this rule
+    if (updateTimeoutRef.current[ruleId]) {
+      clearTimeout(updateTimeoutRef.current[ruleId]);
+    }
+
+    // Debounce the API call (wait 1 second after last keystroke)
+    updateTimeoutRef.current[ruleId] = setTimeout(async () => {
+      try {
+        const updatedRule = await updateStringConversionRule(ruleId, {
+          [field]: value,
+        });
+        setRules(
+          rules.map(rule => (rule._id === ruleId ? updatedRule : rule))
+        );
+      } catch (error: any) {
+        alert(error.message || 'Failed to update conversion rule');
+        // Reload rules on error to restore correct state
+        loadRules();
+      }
+      delete updateTimeoutRef.current[ruleId];
+    }, 1000);
   };
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(updateTimeoutRef.current).forEach(timeout => clearTimeout(timeout));
+    };
+  }, []);
 
   const handleCopyOutput = () => {
     navigator.clipboard.writeText(outputText);
@@ -108,19 +164,37 @@ export const TextConverter: React.FC = () => {
     setOutputText('');
   };
 
-  const handleClearRules = () => {
-    if (confirm('Are you sure you want to clear all conversion rules?')) {
+  const handleClearRules = async () => {
+    if (!confirm('Are you sure you want to clear all conversion rules?')) {
+      return;
+    }
+
+    try {
+      // Delete all rules one by one
+      const deletePromises = rules.map(rule => 
+        rule._id ? deleteStringConversionRule(rule._id) : Promise.resolve()
+      );
+      await Promise.all(deletePromises);
       setRules([]);
-      localStorage.removeItem('textConverterRules');
+    } catch (error: any) {
+      alert(error.message || 'Failed to clear conversion rules');
     }
   };
+
+  if (loading) {
+    return <div className="loading-state">Loading conversion rules...</div>;
+  }
 
   return (
     <div className="text-converter">
       <div className="converter-rules-section">
         <div className="section-header">
           <h3>Conversion Rules</h3>
-          <button className="btn btn-danger btn-small" onClick={handleClearRules}>
+          <button 
+            className="btn btn-danger btn-small" 
+            onClick={handleClearRules}
+            disabled={rules.length === 0 || saving}
+          >
             🗑️ Clear All
           </button>
         </div>
@@ -134,7 +208,8 @@ export const TextConverter: React.FC = () => {
               onChange={(e) => setNewRuleFrom(e.target.value)}
               placeholder="String to find..."
               className="input-field"
-              onKeyPress={(e) => e.key === 'Enter' && handleAddRule()}
+              onKeyPress={(e) => e.key === 'Enter' && !saving && handleAddRule()}
+              disabled={saving}
             />
           </div>
           <div className="rule-input-group">
@@ -145,11 +220,16 @@ export const TextConverter: React.FC = () => {
               onChange={(e) => setNewRuleTo(e.target.value)}
               placeholder="String to replace with..."
               className="input-field"
-              onKeyPress={(e) => e.key === 'Enter' && handleAddRule()}
+              onKeyPress={(e) => e.key === 'Enter' && !saving && handleAddRule()}
+              disabled={saving}
             />
           </div>
-          <button className="btn btn-primary" onClick={handleAddRule}>
-            ➕ Add Rule
+          <button 
+            className="btn btn-primary" 
+            onClick={handleAddRule}
+            disabled={saving}
+          >
+            {saving ? '⏳ Adding...' : '➕ Add Rule'}
           </button>
         </div>
 
@@ -158,7 +238,7 @@ export const TextConverter: React.FC = () => {
         ) : (
           <div className="rules-list">
             {rules.map((rule, index) => (
-              <div key={rule.id} className="rule-item">
+              <div key={rule._id || index} className="rule-item">
                 <div className="rule-number">{index + 1}</div>
                 <div className="rule-content">
                   <div className="rule-from-to">
@@ -166,9 +246,10 @@ export const TextConverter: React.FC = () => {
                     <input
                       type="text"
                       value={rule.from}
-                      onChange={(e) => handleUpdateRule(rule.id, 'from', e.target.value)}
+                      onChange={(e) => handleUpdateRule(rule._id || '', 'from', e.target.value)}
                       className="rule-input"
                       placeholder="From..."
+                      disabled={saving}
                     />
                   </div>
                   <div className="rule-arrow">→</div>
@@ -177,24 +258,27 @@ export const TextConverter: React.FC = () => {
                     <input
                       type="text"
                       value={rule.to}
-                      onChange={(e) => handleUpdateRule(rule.id, 'to', e.target.value)}
+                      onChange={(e) => handleUpdateRule(rule._id || '', 'to', e.target.value)}
                       className="rule-input"
                       placeholder="To..."
+                      disabled={saving}
                     />
                   </div>
                 </div>
                 <div className="rule-actions">
                   <button
                     className={`btn btn-small ${rule.enabled ? 'btn-success' : 'btn-secondary'}`}
-                    onClick={() => handleToggleRule(rule.id)}
+                    onClick={() => handleToggleRule(rule._id || '')}
                     title={rule.enabled ? 'Disable rule' : 'Enable rule'}
+                    disabled={saving || !rule._id}
                   >
                     {rule.enabled ? '✓' : '○'}
                   </button>
                   <button
                     className="btn btn-danger btn-small"
-                    onClick={() => handleDeleteRule(rule.id)}
+                    onClick={() => handleDeleteRule(rule._id || '')}
                     title="Delete rule"
+                    disabled={saving || !rule._id}
                   >
                     🗑️
                   </button>

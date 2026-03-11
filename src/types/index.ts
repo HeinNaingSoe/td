@@ -33,3 +33,12 @@ export interface SummaryItem {
   betCount: number;
   bets: Bet[];
 }
+
+export interface ConversionRule {
+  _id?: string; // MongoDB _id
+  from: string; // String to find
+  to: string; // String to replace with
+  enabled: boolean; // Whether the rule is enabled
+  createdAt?: string;
+  updatedAt?: string;
+}
