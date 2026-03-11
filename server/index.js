@@ -1,3 +1,6 @@
+// Load environment variables from .env file
+require('dotenv').config();
+
 const express = require('express');
 const { MongoClient, ObjectId } = require('mongodb');
 const cors = require('cors');
@@ -5,10 +8,17 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// MongoDB connection string
-const MONGODB_URI = 'mongodb+srv://td_db_user:td00000000@cluster0.zhzkjdp.mongodb.net/';
-const DB_NAME = 'td';
-const COLLECTION_NAME = 'td1';
+// MongoDB connection string from environment variables
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://td_db_user:td00000000@cluster0.zhzkjdp.mongodb.net/';
+const DB_NAME = process.env.DB_NAME || 'td';
+const COLLECTION_NAME = process.env.COLLECTION_NAME || 'td1';
+
+// Validate required environment variables
+if (!MONGODB_URI) {
+  console.error('❌ Error: MONGODB_URI is not set in environment variables');
+  console.error('Please create a .env file with MONGODB_URI=your_connection_string');
+  process.exit(1);
+}
 
 let db;
 let collection;
