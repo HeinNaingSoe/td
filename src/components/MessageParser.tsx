@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { User, ParsedBet, ParsingRule } from '../types';
+import { User, ParsedBet, ParsingRule, ConversionRule } from '../types';
 import { parseMessageWithRules } from '../utils/parser';
-import { getParsingRules } from '../services/api';
+import { getParsingRules, getStringConversionRules } from '../services/api';
 
 interface MessageParserProps {
   users: User[];
@@ -21,16 +21,22 @@ export const MessageParser: React.FC<MessageParserProps> = ({
   const [adding, setAdding] = useState(false);
   const [rules, setRules] = useState<ParsingRule[]>([]);
   const [rulesLoading, setRulesLoading] = useState(false);
+  const [conversionRules, setConversionRules] = useState<ConversionRule[]>([]);
 
   useEffect(() => {
     const loadRules = async () => {
       try {
         setRulesLoading(true);
-        const data = await getParsingRules();
-        setRules(data || []);
+        const [parsingRulesData, conversionRulesData] = await Promise.all([
+          getParsingRules(),
+          getStringConversionRules(),
+        ]);
+        setRules(parsingRulesData || []);
+        setConversionRules(conversionRulesData || []);
       } catch (error) {
-        console.error('Failed to load parsing rules:', error);
+        console.error('Failed to load rules:', error);
         setRules([]);
+        setConversionRules([]);
       } finally {
         setRulesLoading(false);
       }
@@ -55,10 +61,20 @@ export const MessageParser: React.FC<MessageParserProps> = ({
         numbers: r.numbers || []
       }));
 
+    // Prepare conversion rules (only enabled ones)
+    const preparedConversionRules = conversionRules
+      .filter(r => r.enabled && r.from)
+      .map(r => ({
+        from: r.from,
+        to: r.to || '',
+        enabled: r.enabled,
+      }));
+
     const mapping = parseMessageWithRules(
       rawMessage,
       preparedRules,
       minAmount,
+      preparedConversionRules,
     );
 
     if (Object.keys(mapping).length === 0) {

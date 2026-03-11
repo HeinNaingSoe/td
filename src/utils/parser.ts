@@ -27,6 +27,32 @@ export function preprocessMessage(text: string): string {
 }
 
 /**
+ * Apply string conversion rules to a message.
+ * Rules are applied in order, and only enabled rules are used.
+ */
+export function applyStringConversions(
+  text: string,
+  conversionRules: { from: string; to: string; enabled: boolean }[]
+): string {
+  if (!text || !conversionRules || conversionRules.length === 0) {
+    return text;
+  }
+
+  let result = text;
+
+  // Apply enabled rules in order
+  const enabledRules = conversionRules.filter(rule => rule.enabled && rule.from);
+  for (const rule of enabledRules) {
+    // Escape special regex characters in the "from" string
+    const escapedFrom = rule.from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Use global replace to replace all occurrences
+    result = result.replace(new RegExp(escapedFrom, 'g'), rule.to || '');
+  }
+
+  return result;
+}
+
+/**
  * Convert Myanmar digits to ASCII and normalize spacing
  * (Legacy function - kept for backward compatibility)
  */
@@ -85,17 +111,28 @@ export function parseMessage(message: string, minAmount: number = 100): Record<s
  * Parse message with custom rules.
  * Each rule name in the message followed by an amount applies that amount to all numbers in the rule.
  * Also supports explicit pairs like "00 500" or "00500" (after preprocessing).
+ * 
+ * @param message - The original message to parse
+ * @param rules - Parsing rules (rule name -> numbers array)
+ * @param minAmount - Minimum bet amount
+ * @param conversionRules - Optional string conversion rules to apply after preprocessing
  */
 export function parseMessageWithRules(
   message: string,
   rules: { name: string; numbers: string[] }[],
   minAmount: number = 100,
+  conversionRules?: { from: string; to: string; enabled: boolean }[],
 ): Record<string, number> {
   const out: Record<string, number> = {};
   const originalMessage = message || '';
 
   // Preprocess: remove spaces/tabs/newlines, convert Myanmar numbers, lowercase letters
-  const preprocessed = preprocessMessage(originalMessage);
+  let preprocessed = preprocessMessage(originalMessage);
+
+  // Apply string conversion rules after preprocessing
+  if (conversionRules && conversionRules.length > 0) {
+    preprocessed = applyStringConversions(preprocessed, conversionRules);
+  }
 
   // Also keep original for rule matching (rule names may contain Myanmar characters)
   const originalLower = originalMessage.toLowerCase();
