@@ -81,31 +81,55 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
 
   // Expanded rows state
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [expandedNumberRows, setExpandedNumberRows] = useState<Set<string>>(new Set());
 
-  // Calculate number summary from bets
+  // Calculate number summary from bets with user details
   const numberSummary = useMemo(() => {
-    const numberMap = new Map<string, { totalAmount: number; betCount: number; users: Set<string> }>();
+    const numberMap = new Map<string, { 
+      totalAmount: number; 
+      betCount: number; 
+      users: Set<string>;
+      userDetails: Map<string, { count: number; total: number }>; // userId -> {count, total}
+    }>();
     
     summary.forEach((item) => {
       (item.bets || []).forEach((bet: Bet) => {
         const num = bet.number.padStart(2, '0');
-        const existing = numberMap.get(num) || { totalAmount: 0, betCount: 0, users: new Set<string>() };
+        const existing = numberMap.get(num) || { 
+          totalAmount: 0, 
+          betCount: 0, 
+          users: new Set<string>(),
+          userDetails: new Map<string, { count: number; total: number }>()
+        };
         existing.totalAmount += bet.amount || 0;
         existing.betCount += 1;
         existing.users.add(item.userId);
+        
+        // Track user details
+        const userDetail = existing.userDetails.get(item.userId) || { count: 0, total: 0 };
+        userDetail.count += 1;
+        userDetail.total += bet.amount || 0;
+        existing.userDetails.set(item.userId, userDetail);
+        
         numberMap.set(num, existing);
       });
     });
 
-    const result: NumberSummary[] = [];
+    const result: (NumberSummary & { userDetails: Map<string, { count: number; total: number }> })[] = [];
     for (let i = 0; i <= 99; i++) {
       const num = i.toString().padStart(2, '0');
-      const data = numberMap.get(num) || { totalAmount: 0, betCount: 0, users: new Set<string>() };
+      const data = numberMap.get(num) || { 
+        totalAmount: 0, 
+        betCount: 0, 
+        users: new Set<string>(),
+        userDetails: new Map<string, { count: number; total: number }>()
+      };
       result.push({
         number: num,
         totalAmount: data.totalAmount,
         betCount: data.betCount,
         users: Array.from(data.users),
+        userDetails: data.userDetails,
       });
     }
     
@@ -644,6 +668,7 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
                   <table className="data-grid interactive-table">
                     <thead>
                       <tr>
+                        <th style={{ width: '40px' }}></th>
                         <th onClick={() => handleNumberSort('number')} className="sortable">
                           Number <SortIcon field="number" currentField={numberSortField} direction={numberSortDirection} />
                         </th>
@@ -656,6 +681,7 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
                         <th>Users</th>
                       </tr>
                       <tr className="filter-row">
+                        <th></th>
                         <th>
                           <input
                             type="text"
@@ -693,14 +719,92 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
                     <tbody>
                       {filteredNumberSummary
                         .filter(item => item.totalAmount > 0 || item.betCount > 0)
-                        .map((item) => (
-                          <tr key={item.number}>
-                            <td><strong>{item.number}</strong></td>
-                            <td>{item.betCount.toLocaleString()}</td>
-                            <td>{item.totalAmount.toLocaleString()}</td>
-                            <td>{item.users.length > 0 ? item.users.join(', ') : '-'}</td>
-                          </tr>
-                        ))}
+                        .map((item) => {
+                          const isExpanded = expandedNumberRows.has(item.number);
+                          
+                          // Get user details for this number
+                          const userDetails = (item as any).userDetails || new Map<string, { count: number; total: number }>();
+                          const userDetailsArray = Array.from(userDetails.entries())
+                            .map((entry) => {
+                              const [userId, data] = entry as [string, { count: number; total: number }];
+                              return { userId, ...data };
+                            })
+                            .sort((a, b) => b.total - a.total); // Sort by total amount descending
+
+                          const toggleExpand = () => {
+                            setExpandedNumberRows(prev => {
+                              const newSet = new Set(prev);
+                              if (newSet.has(item.number)) {
+                                newSet.delete(item.number);
+                              } else {
+                                newSet.add(item.number);
+                              }
+                              return newSet;
+                            });
+                          };
+
+                          return (
+                            <React.Fragment key={item.number}>
+                              <tr className={isExpanded ? 'expanded-row' : ''}>
+                                <td>
+                                  <button
+                                    className="expand-button"
+                                    onClick={toggleExpand}
+                                    title={isExpanded ? 'Collapse' : 'Expand'}
+                                  >
+                                    {isExpanded ? '▼' : '▶'}
+                                  </button>
+                                </td>
+                                <td><strong>{item.number}</strong></td>
+                                <td>{item.betCount.toLocaleString()}</td>
+                                <td>{item.totalAmount.toLocaleString()}</td>
+                                <td>{item.users.length > 0 ? item.users.join(', ') : '-'}</td>
+                              </tr>
+                              {isExpanded && (
+                                <tr className="expanded-details-row">
+                                  <td colSpan={5}>
+                                    <div className="expanded-details-content">
+                                      <h4>User Details for Number {item.number}</h4>
+                                      {userDetailsArray.length === 0 ? (
+                                        <p className="info-text">No users found for this number in the selected date range.</p>
+                                      ) : (
+                                        <>
+                                          <div className="bet-details-table-container">
+                                            <table className="bet-details-table">
+                                              <thead>
+                                                <tr>
+                                                  <th>User Name</th>
+                                                  <th>Bet Count</th>
+                                                  <th>Total Amount</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {userDetailsArray.map((detail) => (
+                                                  <tr key={detail.userId}>
+                                                    <td><strong>{detail.userId}</strong></td>
+                                                    <td>{detail.count.toLocaleString()}</td>
+                                                    <td>{detail.total.toLocaleString()}</td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                              <tfoot>
+                                                <tr>
+                                                  <td><strong>Total</strong></td>
+                                                  <td><strong>{item.betCount.toLocaleString()}</strong></td>
+                                                  <td><strong>{item.totalAmount.toLocaleString()}</strong></td>
+                                                </tr>
+                                              </tfoot>
+                                            </table>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>

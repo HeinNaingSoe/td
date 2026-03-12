@@ -107,7 +107,7 @@ function App() {
     <div className="app" style={{ minHeight: '100vh', width: '100%', background: '#0f172a', color: '#f1f5f9' }}>
       <div className="main-content" style={{ minHeight: '100vh', padding: '2rem' }}>
         <header className="main-header" style={{ marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '3rem', fontWeight: 800, margin: 0, color: '#f1f5f9' }}>📊 00–99 Betting Table</h1>
+          <h1 style={{ fontSize: '3rem', fontWeight: 800, margin: 0, color: '#f1f5f9' }}>💬 Message Parsing App</h1>
           {users.length === 0 && !loading && (
             <div style={{
               marginTop: '1rem',
