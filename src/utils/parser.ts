@@ -6,7 +6,8 @@ const MYANMAR_DIGITS: Record<string, string> = {
 
 /**
  * Clean text: remove space if not between two numbers, remove enter/tab,
- * convert Myanmar numbers to English, convert to lowercase
+ * convert Myanmar numbers to English, convert to lowercase.
+ * Preserves spaces before and after numbers with 3+ continuous digits (amounts).
  */
 export function cleanText(text: string): string {
   if (!text) return '';
@@ -24,11 +25,20 @@ export function cleanText(text: string): string {
   // Remove tabs and newlines (enter)
   result = result.replace(/[\t\n\r]+/g, '');
 
-  // Remove spaces that are NOT between two digits
-  // Pattern: space that is not preceded by a digit OR not followed by a digit
-  // We'll keep spaces between digits and remove all others
-  result = result.replace(/(\d)\s+(\d)/g, '$1$2'); // Remove space between digits
-  result = result.replace(/\s+/g, ''); // Remove all remaining spaces
+  // Preserve spaces around numbers with 3+ digits (amounts)
+  // First, mark spaces around 3+ digit numbers with a temporary marker
+  const TEMP_MARKER = '___SPACE___';
+  result = result.replace(/(\s+)(\d{3,})/g, `${TEMP_MARKER}$2`); // Space before 3+ digits
+  result = result.replace(/(\d{3,})(\s+)/g, `$1${TEMP_MARKER}`); // Space after 3+ digits
+
+  // Remove spaces between two digits (2-digit numbers)
+  result = result.replace(/(\d)\s+(\d)/g, '$1$2');
+
+  // Remove all remaining spaces
+  result = result.replace(/\s+/g, '');
+
+  // Restore preserved spaces (replace marker with single space)
+  result = result.replace(new RegExp(TEMP_MARKER, 'g'), ' ');
 
   return result;
 }
