@@ -70,15 +70,17 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
     }
   };
 
-  // Set default date range (current month)
+  // Set default date range (current day to current day)
   useEffect(() => {
     const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const today = now.toISOString().split('T')[0];
 
-    setStartDate(firstDay.toISOString().split('T')[0]);
-    setEndDate(lastDay.toISOString().split('T')[0]);
+    setStartDate(today);
+    setEndDate(today);
   }, []);
+
+  // Expanded rows state
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   // Calculate number summary from bets
   const numberSummary = useMemo(() => {
@@ -470,6 +472,7 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
                   <table className="data-grid interactive-table">
                     <thead>
                       <tr>
+                        <th style={{ width: '40px' }}></th>
                         <th onClick={() => handleUserSort('userId')} className="sortable">
                           No <SortIcon field="userId" currentField={userSortField} direction={userSortDirection} />
                         </th>
@@ -487,6 +490,7 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
                         </th>
                       </tr>
                       <tr className="filter-row">
+                        <th></th>
                         <th></th>
                         <th>
                           <input
@@ -523,14 +527,95 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
                     <tbody>
                       {filteredUserSummary.map((item, idx) => {
                         const avgBet = (item.betCount || 0) > 0 ? (item.total || 0) / (item.betCount || 1) : 0;
+                        const isExpanded = expandedRows.has(item.userId);
+                        
+                        // Group bets by number and calculate totals
+                        const betMap = new Map<string, { count: number; total: number }>();
+                        (item.bets || []).forEach((bet: Bet) => {
+                          const num = bet.number.padStart(2, '0');
+                          const existing = betMap.get(num) || { count: 0, total: 0 };
+                          existing.count += 1;
+                          existing.total += bet.amount || 0;
+                          betMap.set(num, existing);
+                        });
+                        
+                        const betDetails = Array.from(betMap.entries())
+                          .map(([number, data]) => ({ number, ...data }))
+                          .sort((a, b) => parseInt(a.number) - parseInt(b.number));
+
+                        const toggleExpand = () => {
+                          setExpandedRows(prev => {
+                            const newSet = new Set(prev);
+                            if (newSet.has(item.userId)) {
+                              newSet.delete(item.userId);
+                            } else {
+                              newSet.add(item.userId);
+                            }
+                            return newSet;
+                          });
+                        };
+
                         return (
-                          <tr key={item.userId}>
-                            <td>{idx + 1}</td>
-                            <td>{item.userId}</td>
-                            <td>{(item.betCount || 0).toLocaleString()}</td>
-                            <td>{(item.total || 0).toLocaleString()}</td>
-                            <td>{avgBet.toFixed(0).toLocaleString()}</td>
-                          </tr>
+                          <React.Fragment key={item.userId}>
+                            <tr className={isExpanded ? 'expanded-row' : ''}>
+                              <td>
+                                <button
+                                  className="expand-button"
+                                  onClick={toggleExpand}
+                                  title={isExpanded ? 'Collapse' : 'Expand'}
+                                >
+                                  {isExpanded ? '▼' : '▶'}
+                                </button>
+                              </td>
+                              <td>{idx + 1}</td>
+                              <td>{item.userId}</td>
+                              <td>{(item.betCount || 0).toLocaleString()}</td>
+                              <td>{(item.total || 0).toLocaleString()}</td>
+                              <td>{avgBet.toFixed(0).toLocaleString()}</td>
+                            </tr>
+                            {isExpanded && (
+                              <tr className="expanded-details-row">
+                                <td colSpan={6}>
+                                  <div className="expanded-details-content">
+                                    <h4>Bet Details for {item.userId}</h4>
+                                    {betDetails.length === 0 ? (
+                                      <p className="info-text">No bets found for the selected date range.</p>
+                                    ) : (
+                                      <>
+                                        <div className="bet-details-table-container">
+                                          <table className="bet-details-table">
+                                            <thead>
+                                              <tr>
+                                                <th>Bet Number</th>
+                                                <th>Count</th>
+                                                <th>Total Amount</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {betDetails.map((detail) => (
+                                                <tr key={detail.number}>
+                                                  <td><strong>{detail.number}</strong></td>
+                                                  <td>{detail.count.toLocaleString()}</td>
+                                                  <td>{detail.total.toLocaleString()}</td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                            <tfoot>
+                                              <tr>
+                                                <td><strong>Total</strong></td>
+                                                <td><strong>{(item.betCount || 0).toLocaleString()}</strong></td>
+                                                <td><strong>{(item.total || 0).toLocaleString()}</strong></td>
+                                              </tr>
+                                            </tfoot>
+                                          </table>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     </tbody>
