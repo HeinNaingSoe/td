@@ -323,14 +323,12 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
   };
 
   const downloadNumberCSV = () => {
-    const headers = ['Number', 'Total Amount', 'Bet Count', 'Users'];
+    const headers = ['Number', 'Total Amount'];
     const rows = filteredNumberSummary
       .filter(item => item.totalAmount > 0 || item.betCount > 0)
       .map(item => [
         item.number,
         item.totalAmount.toString(),
-        item.betCount.toString(),
-        item.users.join('; '),
       ]);
     
     const csvContent = [
