@@ -123,8 +123,8 @@ export function parseMessage(message: string, minAmount: number = 100): Record<s
 }
 
 /**
- * Apply parsing rules: replace rule names with their numbers
- * e.g., if rule "၁ပတ်" has numbers [10,11,12], replace "၁ပတ်" with "101112"
+ * Apply parsing rules: replace rule names with comma-separated numbers
+ * e.g., if rule "1p" has numbers [10,11,12], replace "1p" with "10,11,12"
  */
 export function applyParsingRules(
   text: string,
@@ -143,8 +143,8 @@ export function applyParsingRules(
     // Escape special regex characters in rule name
     const escapedRuleName = rule.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     
-    // Replace rule name with concatenated numbers
-    const replacement = rule.numbers.join('');
+    // Replace rule name with comma-separated numbers
+    const replacement = rule.numbers.join(',');
     result = result.replace(new RegExp(escapedRuleName, 'g'), replacement);
   }
 
