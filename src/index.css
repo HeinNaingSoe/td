@@ -657,15 +657,45 @@ body {
   min-height: 60px;
 }
 
-.parsed-bets-listbox {
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
-  font-size: 0.95rem;
+/* Searchable Select */
+.searchable-select-container {
+  position: relative;
+}
+
+.searchable-select-input {
+  width: 100%;
+}
+
+.searchable-select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+.searchable-select-option {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-primary);
+}
+
+.searchable-select-option:hover {
   background: var(--bg-input);
   color: var(--text-primary);
-  border: 1px solid var(--border);
-  resize: vertical;
-  line-height: 1.6;
-  white-space: pre;
+}
+
+.searchable-select-option.selected {
+  background: var(--gradient-primary);
+  color: white;
 }
 
 /* Summary View */
