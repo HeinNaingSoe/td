@@ -223,8 +223,14 @@ app.get('/api/summary', async (req, res) => {
 
     const users = await req.collection.find(query).toArray();
     const now = new Date();
-    const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = endDate ? new Date(endDate) : new Date();
+    
+    // Set start date to beginning of day (00:00:00)
+    let start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
+    start.setHours(0, 0, 0, 0);
+    
+    // Set end date to end of day (23:59:59.999) to include all bets on that day
+    let end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
 
     const summary = users.map(user => {
       const bets = user.bets || [];
