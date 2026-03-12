@@ -154,10 +154,9 @@ export function applyParsingRules(
 /**
  * Extract bet number and amount from cleaned text.
  * Logic:
- * - Two continuous numbers = bet number
- * - More than two continuous numbers = amount
- * - If comma exists: two numbers between commas = bet number, more than two numbers = amount
- * - If no comma: two numbers = bet number, more than two numbers = amount
+ * - If NO commas: two continuous numbers = bet number, more than two continuous numbers = amount
+ * - If commas exist: two continuous numbers between commas = bet number, more than two continuous numbers = amount
+ * Commas are preserved and used as delimiters.
  */
 export function extractBets(
   text: string,
@@ -169,136 +168,75 @@ export function extractBets(
 
   // Check if text contains commas
   if (text.includes(',')) {
-    // Pattern with commas: "00,100" or "00,100,200"
-    // Two numbers between commas = bet number, more than two numbers = amount
+    // Pattern with commas: "00,100" or "00,100,11,500"
+    // Split by commas and process segments
+    // Two digits between commas = bet number, more than two digits = amount
     const segments = text.split(',');
     
-    for (const segment of segments) {
+    // Process segments in pairs: bet number, amount
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i].trim();
       if (!segment) continue;
       
-      // Find all number sequences in this segment
-      const numberMatches = segment.match(/\d+/g) || [];
+      // Extract only digits from this segment
+      const numberStr = segment.match(/\d+/)?.[0] || '';
       
-      for (let i = 0; i < numberMatches.length; i++) {
-        const numStr = numberMatches[i];
+      if (numberStr.length === 2) {
+        // Two digits = bet number
+        const betNum = parseInt(numberStr, 10);
+        if (isNaN(betNum) || betNum < 0 || betNum > 99) continue;
         
-        if (numStr.length === 2) {
-          // Two digits = bet number
-          const betNum = parseInt(numStr, 10);
-          if (isNaN(betNum) || betNum < 0 || betNum > 99) continue;
+        // Look for amount in the next segment (more than 2 digits)
+        if (i + 1 < segments.length) {
+          const nextSegment = segments[i + 1].trim();
+          const nextNumberStr = nextSegment.match(/\d+/)?.[0] || '';
           
-          // Look for amount (more than 2 digits) after this bet number
-          if (i + 1 < numberMatches.length) {
-            const amtStr = numberMatches[i + 1];
-            if (amtStr.length > 2) {
-              const amt = parseInt(amtStr, 10);
-              if (!isNaN(amt) && amt >= minAmount) {
-                const key = betNum.toString().padStart(2, '0');
-                out[key] = (out[key] || 0) + amt;
-                i++; // Skip the amount
-              }
+          if (nextNumberStr.length > 2) {
+            const amt = parseInt(nextNumberStr, 10);
+            if (!isNaN(amt) && amt >= minAmount) {
+              const key = betNum.toString().padStart(2, '0');
+              out[key] = (out[key] || 0) + amt;
+              i++; // Skip the amount segment
             }
           }
-        } else if (numStr.length > 2) {
-          // More than 2 digits = amount (but we need a bet number first)
-          // This shouldn't happen in comma-separated format, but handle it
-          continue;
         }
+      } else if (numberStr.length > 2) {
+        // More than 2 digits = amount (standalone, or if previous segment was not a bet number)
+        // This can happen if format is inconsistent, skip it
+        continue;
       }
     }
   } else {
     // Pattern without commas: "00100" or "00100200"
-    // Two numbers = bet number, more than two numbers = amount
+    // Two continuous numbers = bet number, more than two continuous numbers = amount
     
-    // First, handle continuous sequences like "00100" (bet "00", amount "100")
-    // Pattern: exactly 2 digits followed by 3+ digits
-    const continuousPattern = /(\d{2})(\d{3,})/g;
-    let match: RegExpExecArray | null;
-    const processedIndices = new Set<number>();
+    // Find all continuous number sequences
+    const numberMatches = text.match(/\d+/g) || [];
     
-    while ((match = continuousPattern.exec(text)) !== null) {
-      const startIndex = match.index;
-      const endIndex = startIndex + match[0].length;
-      
-      // Check if this range overlaps with already processed ranges
-      let overlaps = false;
-      for (let i = startIndex; i < endIndex; i++) {
-        if (processedIndices.has(i)) {
-          overlaps = true;
-          break;
-        }
-      }
-      
-      if (overlaps) continue;
-      
-      const betNumStr = match[1];
-      const amtStr = match[2];
-      const betNum = parseInt(betNumStr, 10);
-      const amt = parseInt(amtStr, 10);
-      
-      if (!isNaN(betNum) && !isNaN(amt) && betNum >= 0 && betNum <= 99 && amt >= minAmount) {
-        const key = betNum.toString().padStart(2, '0');
-        out[key] = (out[key] || 0) + amt;
-        
-        // Mark these indices as processed
-        for (let i = startIndex; i < endIndex; i++) {
-          processedIndices.add(i);
-        }
-      }
-    }
-    
-    // Then, handle separate number sequences
-    // Find all number sequences that weren't processed
-    const allNumberMatches = text.match(/\d+/g) || [];
-    let textIndex = 0;
-    
-    for (let i = 0; i < allNumberMatches.length; i++) {
-      const numStr = allNumberMatches[i];
-      const matchIndex = text.indexOf(numStr, textIndex);
-      
-      // Check if this number was already processed
-      let wasProcessed = false;
-      for (let j = matchIndex; j < matchIndex + numStr.length; j++) {
-        if (processedIndices.has(j)) {
-          wasProcessed = true;
-          break;
-        }
-      }
-      
-      if (wasProcessed) {
-        textIndex = matchIndex + numStr.length;
-        continue;
-      }
+    for (let i = 0; i < numberMatches.length; i++) {
+      const numStr = numberMatches[i];
       
       if (numStr.length === 2) {
         // Two digits = bet number
         const betNum = parseInt(numStr, 10);
-        if (isNaN(betNum) || betNum < 0 || betNum > 99) {
-          textIndex = matchIndex + numStr.length;
-          continue;
-        }
+        if (isNaN(betNum) || betNum < 0 || betNum > 99) continue;
         
         // Look for amount (more than 2 digits) immediately after
-        if (i + 1 < allNumberMatches.length) {
-          const nextNumStr = allNumberMatches[i + 1];
-          const nextMatchIndex = text.indexOf(nextNumStr, matchIndex + numStr.length);
-          
-          // Check if next number is immediately after (no non-digit characters)
-          const betweenText = text.substring(matchIndex + numStr.length, nextMatchIndex);
-          if (betweenText.match(/^\D*$/) && nextNumStr.length > 2) {
+        if (i + 1 < numberMatches.length) {
+          const nextNumStr = numberMatches[i + 1];
+          if (nextNumStr.length > 2) {
             const amt = parseInt(nextNumStr, 10);
             if (!isNaN(amt) && amt >= minAmount) {
               const key = betNum.toString().padStart(2, '0');
               out[key] = (out[key] || 0) + amt;
               i++; // Skip the amount
-              textIndex = nextMatchIndex + nextNumStr.length;
-              continue;
             }
           }
         }
+      } else if (numStr.length > 2) {
+        // More than 2 digits = amount (standalone, skip it as we need a bet number first)
+        continue;
       }
-      
-      textIndex = matchIndex + numStr.length;
     }
   }
 
