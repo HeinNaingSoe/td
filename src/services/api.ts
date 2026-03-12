@@ -124,13 +124,15 @@ export async function deleteBet(userId: string, betId: string): Promise<void> {
 export async function getSummary(
   userId?: string,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  event?: string
 ): Promise<SummaryItem[]> {
   try {
     const params = new URLSearchParams();
     if (userId) params.append('userId', userId);
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
+    if (event) params.append('event', event);
 
     const response = await fetch(`${API_BASE_URL}/summary?${params.toString()}`);
     if (!response.ok) {

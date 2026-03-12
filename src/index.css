@@ -605,6 +605,7 @@ body {
   gap: 2rem;
 }
 
+.event-selector-section,
 .user-selector-section,
 .raw-message-section,
 .parsed-bets-section,
@@ -615,6 +616,7 @@ body {
   border: 1px solid var(--border);
 }
 
+.event-selector-section h3,
 .user-selector-section h3,
 .raw-message-section h3,
 .parsed-bets-section h3,

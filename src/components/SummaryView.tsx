@@ -27,6 +27,7 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
   const [selectedUserId, setSelectedUserId] = useState<string>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState<string>('all');
   const [summary, setSummary] = useState<SummaryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'numbers'>('users');
@@ -49,7 +50,7 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
 
   useEffect(() => {
     loadSummary();
-  }, [selectedUserId, startDate, endDate]);
+  }, [selectedUserId, startDate, endDate, selectedEvent]);
 
   const loadSummary = async () => {
     setLoading(true);
@@ -57,7 +58,8 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
       const data = await getSummary(
         selectedUserId === 'all' ? undefined : selectedUserId,
         startDate || undefined,
-        endDate || undefined
+        endDate || undefined,
+        selectedEvent === 'all' ? undefined : selectedEvent
       );
       setSummary(data || []);
     } catch (error) {
@@ -398,6 +400,19 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ users }) => {
             onChange={(e) => setEndDate(e.target.value)}
             className="input-field"
           />
+        </div>
+
+        <div className="filter-group">
+          <label>Event:</label>
+          <select
+            value={selectedEvent}
+            onChange={(e) => setSelectedEvent(e.target.value)}
+            className="select-field"
+          >
+            <option value="all">All Events</option>
+            <option value="Morning">Morning</option>
+            <option value="Afternoon">Afternoon</option>
+          </select>
         </div>
       </div>
 

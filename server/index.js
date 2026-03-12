@@ -214,7 +214,7 @@ app.delete('/api/users/:userId/bets/:betId', async (req, res) => {
 // GET - Get summary (totals by user, with filters)
 app.get('/api/summary', async (req, res) => {
   try {
-    const { userId, startDate, endDate } = req.query;
+    const { userId, startDate, endDate, event } = req.query;
 
     let query = {};
     if (userId && userId !== 'all') {
@@ -231,7 +231,14 @@ app.get('/api/summary', async (req, res) => {
       const filteredBets = bets.filter(bet => {
         if (!bet || !bet.date) return false;
         const betDate = new Date(bet.date);
-        return betDate >= start && betDate <= end;
+        const dateMatch = betDate >= start && betDate <= end;
+        
+        // Filter by event if provided
+        if (event && event !== 'all') {
+          return dateMatch && bet.event === event;
+        }
+        
+        return dateMatch;
       });
 
       const total = filteredBets.reduce((sum, bet) => sum + (bet.amount || 0), 0);

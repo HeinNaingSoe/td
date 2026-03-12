@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { User, ParsedBet, ParsingRule, ConversionRule } from '../types';
+import { User, ParsedBet, ParsingRule, ConversionRule, EventType } from '../types';
 import { parseMessageWithRulesAndSteps } from '../utils/parser';
 import { getParsingRules, getStringConversionRules } from '../services/api';
 
@@ -23,6 +23,13 @@ export const MessageParser: React.FC<MessageParserProps> = ({
   const [rulesLoading, setRulesLoading] = useState(false);
   const [conversionRules, setConversionRules] = useState<ConversionRule[]>([]);
   const [preprocessedText, setPreprocessedText] = useState<{ step1: string; step2: string; step3: string; step4: string } | null>(null);
+  
+  // Event state - default based on current time
+  const getDefaultEvent = (): EventType => {
+    const hour = new Date().getHours();
+    return hour < 12 ? 'Morning' : 'Afternoon';
+  };
+  const [event, setEvent] = useState<EventType>(getDefaultEvent());
 
   useEffect(() => {
     const loadRules = async () => {
@@ -96,6 +103,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
         number: number.padStart(2, '0'),
         amount: amount as number,
         message: rawMessage,
+        event: event,
       }))
       .sort((a, b) => a.number.localeCompare(b.number));
 
@@ -129,6 +137,18 @@ export const MessageParser: React.FC<MessageParserProps> = ({
 
   return (
     <div className="message-parser">
+      <div className="event-selector-section">
+        <h3>Event</h3>
+        <select
+          value={event}
+          onChange={(e) => setEvent(e.target.value as EventType)}
+          className="select-field"
+        >
+          <option value="Morning">Morning</option>
+          <option value="Afternoon">Afternoon</option>
+        </select>
+      </div>
+
       <div className="user-selector-section">
         <h3>Select User</h3>
         {rulesLoading && (

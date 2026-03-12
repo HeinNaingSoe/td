@@ -1,8 +1,11 @@
+export type EventType = 'Morning' | 'Afternoon';
+
 export interface Bet {
   number: string; // 00-99
   amount: number;
   date: string; // ISO date string
   message: string; // Original message
+  event?: EventType; // Morning or Afternoon
   _id?: string; // MongoDB _id for the bet
 }
 
@@ -17,6 +20,7 @@ export interface ParsedBet {
   number: string;
   amount: number;
   message: string;
+  event?: EventType; // Morning or Afternoon
 }
 
 export interface ParsingRule {
