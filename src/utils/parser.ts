@@ -5,14 +5,15 @@ const MYANMAR_DIGITS: Record<string, string> = {
 };
 
 /**
- * Preprocess message: remove spaces/tabs/newlines, convert Myanmar numbers to English, lowercase English letters
+ * Clean text: remove space if not between two numbers, remove enter/tab,
+ * convert Myanmar numbers to English, convert to lowercase
  */
-export function preprocessMessage(text: string): string {
+export function cleanText(text: string): string {
   if (!text) return '';
 
   let result = text;
 
-  // Convert Myanmar digits to ASCII
+  // Convert Myanmar digits to ASCII first
   for (const [myanmar, ascii] of Object.entries(MYANMAR_DIGITS)) {
     result = result.replace(new RegExp(myanmar, 'g'), ascii);
   }
@@ -20,10 +21,24 @@ export function preprocessMessage(text: string): string {
   // Convert English letters to lowercase
   result = result.toLowerCase();
 
-  // Remove spaces, tabs, and newlines (including all whitespace characters)
-  result = result.replace(/\s+/g, '');
+  // Remove tabs and newlines (enter)
+  result = result.replace(/[\t\n\r]+/g, '');
+
+  // Remove spaces that are NOT between two digits
+  // Pattern: space that is not preceded by a digit OR not followed by a digit
+  // We'll keep spaces between digits and remove all others
+  result = result.replace(/(\d)\s+(\d)/g, '$1$2'); // Remove space between digits
+  result = result.replace(/\s+/g, ''); // Remove all remaining spaces
 
   return result;
+}
+
+/**
+ * Preprocess message: remove spaces/tabs/newlines, convert Myanmar numbers to English, lowercase English letters
+ * (Legacy function - kept for backward compatibility)
+ */
+export function preprocessMessage(text: string): string {
+  return cleanText(text);
 }
 
 /**
@@ -108,14 +123,199 @@ export function parseMessage(message: string, minAmount: number = 100): Record<s
 }
 
 /**
- * Parse message with custom rules.
- * Each rule name in the message followed by an amount applies that amount to all numbers in the rule.
- * Also supports explicit pairs like "00 500" or "00500" (after preprocessing).
+ * Apply parsing rules: replace rule names with their numbers
+ * e.g., if rule "၁ပတ်" has numbers [10,11,12], replace "၁ပတ်" with "101112"
+ */
+export function applyParsingRules(
+  text: string,
+  rules: { name: string; numbers: string[] }[]
+): string {
+  if (!text || !rules || rules.length === 0) {
+    return text;
+  }
+
+  let result = text;
+
+  // Apply rules in order
+  for (const rule of rules) {
+    if (!rule.name || !rule.numbers || rule.numbers.length === 0) continue;
+
+    // Escape special regex characters in rule name
+    const escapedRuleName = rule.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Replace rule name with concatenated numbers
+    const replacement = rule.numbers.join('');
+    result = result.replace(new RegExp(escapedRuleName, 'g'), replacement);
+  }
+
+  return result;
+}
+
+/**
+ * Extract bet number and amount from cleaned text.
+ * Logic:
+ * - Two continuous numbers = bet number
+ * - More than two continuous numbers = amount
+ * - If comma exists: two numbers between commas = bet number, more than two numbers = amount
+ * - If no comma: two numbers = bet number, more than two numbers = amount
+ */
+export function extractBets(
+  text: string,
+  minAmount: number = 100
+): Record<string, number> {
+  const out: Record<string, number> = {};
+
+  if (!text) return out;
+
+  // Check if text contains commas
+  if (text.includes(',')) {
+    // Pattern with commas: "00,100" or "00,100,200"
+    // Two numbers between commas = bet number, more than two numbers = amount
+    const segments = text.split(',');
+    
+    for (const segment of segments) {
+      if (!segment) continue;
+      
+      // Find all number sequences in this segment
+      const numberMatches = segment.match(/\d+/g) || [];
+      
+      for (let i = 0; i < numberMatches.length; i++) {
+        const numStr = numberMatches[i];
+        
+        if (numStr.length === 2) {
+          // Two digits = bet number
+          const betNum = parseInt(numStr, 10);
+          if (isNaN(betNum) || betNum < 0 || betNum > 99) continue;
+          
+          // Look for amount (more than 2 digits) after this bet number
+          if (i + 1 < numberMatches.length) {
+            const amtStr = numberMatches[i + 1];
+            if (amtStr.length > 2) {
+              const amt = parseInt(amtStr, 10);
+              if (!isNaN(amt) && amt >= minAmount) {
+                const key = betNum.toString().padStart(2, '0');
+                out[key] = (out[key] || 0) + amt;
+                i++; // Skip the amount
+              }
+            }
+          }
+        } else if (numStr.length > 2) {
+          // More than 2 digits = amount (but we need a bet number first)
+          // This shouldn't happen in comma-separated format, but handle it
+          continue;
+        }
+      }
+    }
+  } else {
+    // Pattern without commas: "00100" or "00100200"
+    // Two numbers = bet number, more than two numbers = amount
+    
+    // First, handle continuous sequences like "00100" (bet "00", amount "100")
+    // Pattern: exactly 2 digits followed by 3+ digits
+    const continuousPattern = /(\d{2})(\d{3,})/g;
+    let match: RegExpExecArray | null;
+    const processedIndices = new Set<number>();
+    
+    while ((match = continuousPattern.exec(text)) !== null) {
+      const startIndex = match.index;
+      const endIndex = startIndex + match[0].length;
+      
+      // Check if this range overlaps with already processed ranges
+      let overlaps = false;
+      for (let i = startIndex; i < endIndex; i++) {
+        if (processedIndices.has(i)) {
+          overlaps = true;
+          break;
+        }
+      }
+      
+      if (overlaps) continue;
+      
+      const betNumStr = match[1];
+      const amtStr = match[2];
+      const betNum = parseInt(betNumStr, 10);
+      const amt = parseInt(amtStr, 10);
+      
+      if (!isNaN(betNum) && !isNaN(amt) && betNum >= 0 && betNum <= 99 && amt >= minAmount) {
+        const key = betNum.toString().padStart(2, '0');
+        out[key] = (out[key] || 0) + amt;
+        
+        // Mark these indices as processed
+        for (let i = startIndex; i < endIndex; i++) {
+          processedIndices.add(i);
+        }
+      }
+    }
+    
+    // Then, handle separate number sequences
+    // Find all number sequences that weren't processed
+    const allNumberMatches = text.match(/\d+/g) || [];
+    let textIndex = 0;
+    
+    for (let i = 0; i < allNumberMatches.length; i++) {
+      const numStr = allNumberMatches[i];
+      const matchIndex = text.indexOf(numStr, textIndex);
+      
+      // Check if this number was already processed
+      let wasProcessed = false;
+      for (let j = matchIndex; j < matchIndex + numStr.length; j++) {
+        if (processedIndices.has(j)) {
+          wasProcessed = true;
+          break;
+        }
+      }
+      
+      if (wasProcessed) {
+        textIndex = matchIndex + numStr.length;
+        continue;
+      }
+      
+      if (numStr.length === 2) {
+        // Two digits = bet number
+        const betNum = parseInt(numStr, 10);
+        if (isNaN(betNum) || betNum < 0 || betNum > 99) {
+          textIndex = matchIndex + numStr.length;
+          continue;
+        }
+        
+        // Look for amount (more than 2 digits) immediately after
+        if (i + 1 < allNumberMatches.length) {
+          const nextNumStr = allNumberMatches[i + 1];
+          const nextMatchIndex = text.indexOf(nextNumStr, matchIndex + numStr.length);
+          
+          // Check if next number is immediately after (no non-digit characters)
+          const betweenText = text.substring(matchIndex + numStr.length, nextMatchIndex);
+          if (betweenText.match(/^\D*$/) && nextNumStr.length > 2) {
+            const amt = parseInt(nextNumStr, 10);
+            if (!isNaN(amt) && amt >= minAmount) {
+              const key = betNum.toString().padStart(2, '0');
+              out[key] = (out[key] || 0) + amt;
+              i++; // Skip the amount
+              textIndex = nextMatchIndex + nextNumStr.length;
+              continue;
+            }
+          }
+        }
+      }
+      
+      textIndex = matchIndex + numStr.length;
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Parse message with the new logic:
+ * 1) Clean text (remove space if not between two numbers, enter, tab, Myanmar number to English, lower case)
+ * 2) Convert strings based on string_conversion collection
+ * 3) Convert the string based on parsing rules (replace rule names with numbers)
+ * 4) Extract bet number and amount
  * 
  * @param message - The original message to parse
  * @param rules - Parsing rules (rule name -> numbers array)
  * @param minAmount - Minimum bet amount
- * @param conversionRules - Optional string conversion rules to apply after preprocessing
+ * @param conversionRules - Optional string conversion rules to apply after cleaning
  */
 export function parseMessageWithRules(
   message: string,
@@ -123,97 +323,23 @@ export function parseMessageWithRules(
   minAmount: number = 100,
   conversionRules?: { from: string; to: string; enabled: boolean }[],
 ): Record<string, number> {
-  const out: Record<string, number> = {};
-  const originalMessage = message || '';
+  if (!message) return {};
 
-  // Preprocess: remove spaces/tabs/newlines, convert Myanmar numbers, lowercase letters
-  let preprocessed = preprocessMessage(originalMessage);
+  // Step 1: Clean text
+  let cleaned = cleanText(message);
 
-  // Apply string conversion rules after preprocessing
+  // Step 2: Apply string conversion rules
   if (conversionRules && conversionRules.length > 0) {
-    preprocessed = applyStringConversions(preprocessed, conversionRules);
+    cleaned = applyStringConversions(cleaned, conversionRules);
   }
 
-  // Also keep original for rule matching (rule names may contain Myanmar characters)
-  const originalLower = originalMessage.toLowerCase();
-
-  // 1) Apply rules: e.g., "၁ပတ် 200" or "၁ပတ်200" → all numbers in rule get 200 each
-  // Match in original message (lowercased) to preserve Myanmar characters in rule names
-  for (const rule of rules) {
-    if (!rule.name || !rule.numbers || rule.numbers.length === 0) continue;
-
-    // Escape special regex characters in rule name
-    const escapedRuleName = rule.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    // Match: ruleName followed by optional spaces/tabs/newlines, then amount
-    // Pattern 1: with spaces (original format)
-    const patternWithSpaces = new RegExp(`${escapedRuleName}\\s+([\\d၀၁၂၃၄၅၆၇၈၉]+)`, 'gi');
-    // Pattern 2: without spaces (after preprocessing)
-    const patternNoSpaces = new RegExp(`${escapedRuleName}([\\d၀၁၂၃၄၅၆၇၈၉]+)`, 'gi');
-
-    let match: RegExpExecArray | null;
-
-    // Try matching with spaces first
-    while ((match = patternWithSpaces.exec(originalLower)) !== null) {
-      const amtStr = preprocessMessage(match[1]); // Preprocess to get clean digits
-      const amt = parseInt(amtStr, 10);
-      if (isNaN(amt) || amt < minAmount) continue;
-
-      for (const numStr of rule.numbers) {
-        const key = numStr.toString().padStart(2, '0');
-        out[key] = (out[key] || 0) + amt;
-      }
-    }
-
-    // Try matching without spaces
-    const preprocessedLower = preprocessed.toLowerCase();
-    while ((match = patternNoSpaces.exec(preprocessedLower)) !== null) {
-      const amtStr = match[1];
-      const amt = parseInt(amtStr, 10);
-      if (isNaN(amt) || amt < minAmount) continue;
-
-      for (const numStr of rule.numbers) {
-        const key = numStr.toString().padStart(2, '0');
-        out[key] = (out[key] || 0) + amt;
-      }
-    }
+  // Step 3: Apply parsing rules (replace rule names with their numbers)
+  if (rules && rules.length > 0) {
+    cleaned = applyParsingRules(cleaned, rules);
   }
 
-  // 2) Handle explicit pairs: e.g., "00 500", "19 200", or "00500", "19200"
-  // Try pattern with spaces first (original format)
-  const pairRegexWithSpaces = /(\d{1,2})\s+(\d+)/g;
-  let m: RegExpExecArray | null;
-  while ((m = pairRegexWithSpaces.exec(originalMessage)) !== null) {
-    const numStr = m[1];
-    const amtStr = m[2];
-    const num = parseInt(numStr, 10);
-    const amt = parseInt(amtStr, 10);
-    if (isNaN(num) || isNaN(amt)) continue;
-    if (num < 0 || num > 99 || amt < minAmount) continue;
-
-    const key = num.toString().padStart(2, '0');
-    out[key] = (out[key] || 0) + amt;
-  }
-
-  // Try pattern without spaces (preprocessed format)
-  // Pattern: 1-2 digits (number) followed by 3+ digits (amount)
-  // e.g., "00500" = number 00, amount 500
-  // e.g., "19200" = number 19, amount 200
-  const pairRegexNoSpaces = /(\d{1,2})(\d{3,})/g;
-  while ((m = pairRegexNoSpaces.exec(preprocessed)) !== null) {
-    const numStr = m[1];
-    const amtStr = m[2];
-    const num = parseInt(numStr, 10);
-    const amt = parseInt(amtStr, 10);
-    if (isNaN(num) || isNaN(amt)) continue;
-    if (num < 0 || num > 99 || amt < minAmount) continue;
-
-    const key = num.toString().padStart(2, '0');
-    // Only add if not already set by a rule (or add to existing)
-    out[key] = (out[key] || 0) + amt;
-  }
-
-  return out;
+  // Step 4: Extract bet number and amount
+  return extractBets(cleaned, minAmount);
 }
 
 /**
