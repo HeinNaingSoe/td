@@ -25,6 +25,10 @@ export function cleanText(text: string): string {
   // Remove tabs and newlines (enter)
   result = result.replace(/[\t\n\r]+/g, '');
 
+  // Replace hyphens with spaces around numbers with 3+ digits (amounts)
+  result = result.replace(/(-+)(\d{3,})/g, ' $2'); // Hyphen(s) before 3+ digits -> space
+  result = result.replace(/(\d{3,})(-+)/g, '$1 '); // Hyphen(s) after 3+ digits -> space
+
   // Preserve spaces around numbers with 3+ digits (amounts)
   // First, mark spaces around 3+ digit numbers with a temporary marker
   const TEMP_MARKER = '___SPACE___';
@@ -301,6 +305,50 @@ export function extractBets(
 }
 
 /**
+ * Parse message with the new logic and return intermediate steps:
+ * 1) Clean text (remove space if not between two numbers, enter, tab, Myanmar number to English, lower case)
+ * 2) Convert strings based on string_conversion collection
+ * 3) Convert the string based on parsing rules (replace rule names with numbers)
+ * 4) Extract bet number and amount
+ * 
+ * @param message - The original message to parse
+ * @param rules - Parsing rules (rule name -> numbers array)
+ * @param minAmount - Minimum bet amount
+ * @param conversionRules - Optional string conversion rules to apply after cleaning
+ * @returns Object with bets and intermediate preprocessing steps
+ */
+export function parseMessageWithRulesAndSteps(
+  message: string,
+  rules: { name: string; numbers: string[] }[],
+  minAmount: number = 100,
+  conversionRules?: { from: string; to: string; enabled: boolean }[],
+): { bets: Record<string, number>; step1: string; step2: string; step3: string } {
+  if (!message) {
+    return { bets: {}, step1: '', step2: '', step3: '' };
+  }
+
+  // Step 1: Clean text
+  let step1 = cleanText(message);
+
+  // Step 2: Apply string conversion rules
+  let step2 = step1;
+  if (conversionRules && conversionRules.length > 0) {
+    step2 = applyStringConversions(step1, conversionRules);
+  }
+
+  // Step 3: Apply parsing rules (replace rule names with their numbers)
+  let step3 = step2;
+  if (rules && rules.length > 0) {
+    step3 = applyParsingRules(step2, rules);
+  }
+
+  // Step 4: Extract bet number and amount
+  const bets = extractBets(step3, minAmount);
+
+  return { bets, step1, step2, step3 };
+}
+
+/**
  * Parse message with the new logic:
  * 1) Clean text (remove space if not between two numbers, enter, tab, Myanmar number to English, lower case)
  * 2) Convert strings based on string_conversion collection
@@ -318,23 +366,7 @@ export function parseMessageWithRules(
   minAmount: number = 100,
   conversionRules?: { from: string; to: string; enabled: boolean }[],
 ): Record<string, number> {
-  if (!message) return {};
-
-  // Step 1: Clean text
-  let cleaned = cleanText(message);
-
-  // Step 2: Apply string conversion rules
-  if (conversionRules && conversionRules.length > 0) {
-    cleaned = applyStringConversions(cleaned, conversionRules);
-  }
-
-  // Step 3: Apply parsing rules (replace rule names with their numbers)
-  if (rules && rules.length > 0) {
-    cleaned = applyParsingRules(cleaned, rules);
-  }
-
-  // Step 4: Extract bet number and amount
-  return extractBets(cleaned, minAmount);
+  return parseMessageWithRulesAndSteps(message, rules, minAmount, conversionRules).bets;
 }
 
 /**

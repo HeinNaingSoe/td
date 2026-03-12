@@ -607,7 +607,8 @@ body {
 
 .user-selector-section,
 .raw-message-section,
-.parsed-bets-section {
+.parsed-bets-section,
+.preprocessed-text-section {
   background: var(--bg-card);
   padding: 2rem;
   border-radius: 16px;
@@ -616,11 +617,42 @@ body {
 
 .user-selector-section h3,
 .raw-message-section h3,
-.parsed-bets-section h3 {
+.parsed-bets-section h3,
+.preprocessed-text-section h3 {
   margin-bottom: 1rem;
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.preprocessed-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.preprocessed-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.preprocessed-step label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.preprocessed-textarea {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 0.875rem;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  resize: vertical;
+  min-height: 60px;
 }
 
 .parsed-bets-list {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { User, ParsedBet, ParsingRule, ConversionRule } from '../types';
-import { parseMessageWithRules } from '../utils/parser';
+import { parseMessageWithRulesAndSteps } from '../utils/parser';
 import { getParsingRules, getStringConversionRules } from '../services/api';
 
 interface MessageParserProps {
@@ -22,6 +22,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
   const [rules, setRules] = useState<ParsingRule[]>([]);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [conversionRules, setConversionRules] = useState<ConversionRule[]>([]);
+  const [preprocessedText, setPreprocessedText] = useState<{ step1: string; step2: string; step3: string } | null>(null);
 
   useEffect(() => {
     const loadRules = async () => {
@@ -70,12 +71,15 @@ export const MessageParser: React.FC<MessageParserProps> = ({
         enabled: r.enabled,
       }));
 
-    const mapping = parseMessageWithRules(
+    const { bets: mapping, step1, step2, step3 } = parseMessageWithRulesAndSteps(
       rawMessage,
       preparedRules,
       minAmount,
       preparedConversionRules,
     );
+
+    // Set preprocessed text for display
+    setPreprocessedText({ step1, step2, step3 });
 
     if (Object.keys(mapping).length === 0) {
       const hasRules = preparedRules.length > 0;
@@ -90,7 +94,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
       .filter(([_, amount]) => amount > 0)
       .map(([number, amount]) => ({
         number: number.padStart(2, '0'),
-        amount,
+        amount: amount as number,
         message: rawMessage,
       }))
       .sort((a, b) => a.number.localeCompare(b.number));
@@ -166,6 +170,41 @@ export const MessageParser: React.FC<MessageParserProps> = ({
           🔍 Parse Message
         </button>
       </div>
+
+      {preprocessedText && (
+        <div className="preprocessed-text-section">
+          <h3>Preprocessed Text</h3>
+          <div className="preprocessed-steps">
+            <div className="preprocessed-step">
+              <label>Step 1 (Cleaned):</label>
+              <textarea
+                value={preprocessedText.step1}
+                readOnly
+                className="textarea-field preprocessed-textarea"
+                rows={3}
+              />
+            </div>
+            <div className="preprocessed-step">
+              <label>Step 2 (After String Conversion):</label>
+              <textarea
+                value={preprocessedText.step2}
+                readOnly
+                className="textarea-field preprocessed-textarea"
+                rows={3}
+              />
+            </div>
+            <div className="preprocessed-step">
+              <label>Step 3 (After Parsing Rules):</label>
+              <textarea
+                value={preprocessedText.step3}
+                readOnly
+                className="textarea-field preprocessed-textarea"
+                rows={3}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {parsedBets.length > 0 && (
         <div className="parsed-bets-section">
