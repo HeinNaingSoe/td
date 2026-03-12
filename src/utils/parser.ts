@@ -25,15 +25,19 @@ export function cleanText(text: string): string {
   // Remove tabs and newlines (enter)
   result = result.replace(/[\t\n\r]+/g, '');
 
-  // Replace hyphens with spaces around numbers with 3+ digits (amounts)
-  result = result.replace(/(-+)(\d{3,})/g, ' $2'); // Hyphen(s) before 3+ digits -> space
-  result = result.replace(/(\d{3,})(-+)/g, '$1 '); // Hyphen(s) after 3+ digits -> space
-
-  // Preserve spaces around numbers with 3+ digits (amounts)
-  // First, mark spaces around 3+ digit numbers with a temporary marker
+  // Preserve hyphens and spaces around numbers with 3+ digits (amounts)
+  // First, mark hyphens and spaces around 3+ digit numbers with a temporary marker
   const TEMP_MARKER = '___SPACE___';
-  result = result.replace(/(\s+)(\d{3,})/g, `${TEMP_MARKER}$2`); // Space before 3+ digits
-  result = result.replace(/(\d{3,})(\s+)/g, `$1${TEMP_MARKER}`); // Space after 3+ digits
+  const TEMP_HYPHEN = '___HYPHEN___';
+  
+  // Mark hyphens before 3+ digits
+  result = result.replace(/(-+)(\d{3,})/g, `${TEMP_HYPHEN}$2`);
+  // Mark hyphens after 3+ digits
+  result = result.replace(/(\d{3,})(-+)/g, `$1${TEMP_HYPHEN}`);
+  // Mark spaces before 3+ digits
+  result = result.replace(/(\s+)(\d{3,})/g, `${TEMP_MARKER}$2`);
+  // Mark spaces after 3+ digits
+  result = result.replace(/(\d{3,})(\s+)/g, `$1${TEMP_MARKER}`);
 
   // Remove spaces between two digits (2-digit numbers)
   result = result.replace(/(\d)\s+(\d)/g, '$1$2');
@@ -43,6 +47,8 @@ export function cleanText(text: string): string {
 
   // Restore preserved spaces (replace marker with single space)
   result = result.replace(new RegExp(TEMP_MARKER, 'g'), ' ');
+  // Restore preserved hyphens (replace marker with hyphen)
+  result = result.replace(new RegExp(TEMP_HYPHEN, 'g'), '-');
 
   return result;
 }
@@ -305,11 +311,21 @@ export function extractBets(
 }
 
 /**
+ * Step 4: Keep only digits, commas, and hyphens, remove all other characters
+ */
+export function keepOnlyDigitsCommasHyphens(text: string): string {
+  if (!text) return '';
+  // Keep only digits (0-9), commas, and hyphens
+  return text.replace(/[^\d,\-]/g, '');
+}
+
+/**
  * Parse message with the new logic and return intermediate steps:
  * 1) Clean text (remove space if not between two numbers, enter, tab, Myanmar number to English, lower case)
  * 2) Convert strings based on string_conversion collection
  * 3) Convert the string based on parsing rules (replace rule names with numbers)
- * 4) Extract bet number and amount
+ * 4) Keep only digits, commas, and hyphens
+ * 5) Extract bet number and amount
  * 
  * @param message - The original message to parse
  * @param rules - Parsing rules (rule name -> numbers array)
@@ -322,9 +338,9 @@ export function parseMessageWithRulesAndSteps(
   rules: { name: string; numbers: string[] }[],
   minAmount: number = 100,
   conversionRules?: { from: string; to: string; enabled: boolean }[],
-): { bets: Record<string, number>; step1: string; step2: string; step3: string } {
+): { bets: Record<string, number>; step1: string; step2: string; step3: string; step4: string } {
   if (!message) {
-    return { bets: {}, step1: '', step2: '', step3: '' };
+    return { bets: {}, step1: '', step2: '', step3: '', step4: '' };
   }
 
   // Step 1: Clean text
@@ -342,10 +358,13 @@ export function parseMessageWithRulesAndSteps(
     step3 = applyParsingRules(step2, rules);
   }
 
-  // Step 4: Extract bet number and amount
-  const bets = extractBets(step3, minAmount);
+  // Step 4: Keep only digits, commas, and hyphens
+  let step4 = keepOnlyDigitsCommasHyphens(step3);
 
-  return { bets, step1, step2, step3 };
+  // Step 5: Extract bet number and amount
+  const bets = extractBets(step4, minAmount);
+
+  return { bets, step1, step2, step3, step4 };
 }
 
 /**

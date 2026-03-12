@@ -22,7 +22,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
   const [rules, setRules] = useState<ParsingRule[]>([]);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [conversionRules, setConversionRules] = useState<ConversionRule[]>([]);
-  const [preprocessedText, setPreprocessedText] = useState<{ step1: string; step2: string; step3: string } | null>(null);
+  const [preprocessedText, setPreprocessedText] = useState<{ step1: string; step2: string; step3: string; step4: string } | null>(null);
 
   useEffect(() => {
     const loadRules = async () => {
@@ -71,7 +71,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
         enabled: r.enabled,
       }));
 
-    const { bets: mapping, step1, step2, step3 } = parseMessageWithRulesAndSteps(
+    const { bets: mapping, step1, step2, step3, step4 } = parseMessageWithRulesAndSteps(
       rawMessage,
       preparedRules,
       minAmount,
@@ -79,7 +79,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
     );
 
     // Set preprocessed text for display
-    setPreprocessedText({ step1, step2, step3 });
+    setPreprocessedText({ step1, step2, step3, step4 });
 
     if (Object.keys(mapping).length === 0) {
       const hasRules = preparedRules.length > 0;
@@ -197,6 +197,15 @@ export const MessageParser: React.FC<MessageParserProps> = ({
               <label>Step 3 (After Parsing Rules):</label>
               <textarea
                 value={preprocessedText.step3}
+                readOnly
+                className="textarea-field preprocessed-textarea"
+                rows={3}
+              />
+            </div>
+            <div className="preprocessed-step">
+              <label>Step 4 (Keep Only Digits, Commas, Hyphens):</label>
+              <textarea
+                value={preprocessedText.step4}
                 readOnly
                 className="textarea-field preprocessed-textarea"
                 rows={3}
