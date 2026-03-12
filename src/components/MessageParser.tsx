@@ -102,15 +102,6 @@ export const MessageParser: React.FC<MessageParserProps> = ({
     setParsedBets(bets);
   };
 
-  const handleBetChange = (index: number, field: 'number' | 'amount', value: string | number) => {
-    const updated = [...parsedBets];
-    updated[index] = { ...updated[index], [field]: value };
-    setParsedBets(updated);
-  };
-
-  const handleDeleteBet = (index: number) => {
-    setParsedBets(parsedBets.filter((_, i) => i !== index));
-  };
 
   const handleAddBets = async () => {
     if (!selectedUserId || selectedUserId === '') {
@@ -218,45 +209,17 @@ export const MessageParser: React.FC<MessageParserProps> = ({
       {parsedBets.length > 0 && (
         <div className="parsed-bets-section">
           <h3>Parsed Bets ({parsedBets.length})</h3>
-          <p className="help-text">Edit the bets below before adding to user</p>
-          <div className="parsed-bets-list">
-            {parsedBets.map((bet, idx) => (
-              <div key={idx} className="parsed-bet-item">
-                <div className="bet-input-group">
-                  <label>Number:</label>
-                  <input
-                    type="text"
-                    value={bet.number}
-                    onChange={(e) => handleBetChange(idx, 'number', e.target.value)}
-                    className="input-field bet-input"
-                    placeholder="00"
-                    maxLength={2}
-                  />
-                </div>
-                <div className="bet-input-group">
-                  <label>Bet:</label>
-                  <input
-                    type="number"
-                    value={bet.amount}
-                    onChange={(e) => handleBetChange(idx, 'amount', parseInt(e.target.value) || 0)}
-                    className="input-field bet-input"
-                    placeholder="200"
-                  />
-                </div>
-                <button
-                  className="btn btn-danger btn-small"
-                  onClick={() => handleDeleteBet(idx)}
-                  title="Remove bet"
-                >
-                  🗑️
-                </button>
-              </div>
-            ))}
-          </div>
+          <textarea
+            value={parsedBets.map(bet => `${bet.number} - ${bet.amount}`).join('\n')}
+            readOnly
+            className="textarea-field parsed-bets-listbox"
+            rows={Math.min(parsedBets.length + 2, 15)}
+          />
           <button
             className="btn btn-primary"
             onClick={handleAddBets}
             disabled={adding || !selectedUserId}
+            style={{ marginTop: '1rem' }}
           >
             {adding ? 'Adding...' : '✅ Add Bets to User'}
           </button>

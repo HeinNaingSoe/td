@@ -655,40 +655,15 @@ body {
   min-height: 60px;
 }
 
-.parsed-bets-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin: 1.5rem 0;
-}
-
-.parsed-bet-item {
-  display: flex;
-  gap: 1rem;
-  align-items: flex-end;
-  padding: 1rem;
+.parsed-bets-listbox {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 0.95rem;
   background: var(--bg-input);
-  border-radius: 12px;
+  color: var(--text-primary);
   border: 1px solid var(--border);
-}
-
-.bet-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  flex: 1;
-}
-
-.bet-input-group label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.bet-input {
-  margin-bottom: 0;
+  resize: vertical;
+  line-height: 1.6;
+  white-space: pre;
 }
 
 /* Summary View */
