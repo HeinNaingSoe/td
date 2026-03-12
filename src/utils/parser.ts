@@ -26,7 +26,7 @@ export function cleanText(text: string): string {
   result = result.replace(/[\t\n\r]+/g, '');
 
   // Preserve hyphens and spaces around numbers with 3+ digits (amounts)
-  // First, mark hyphens and spaces around 3+ digit numbers with a temporary marker
+  // First, mark hyphens and spaces around 3+ digit numbers with temporary markers
   const TEMP_MARKER = '___SPACE___';
   const TEMP_HYPHEN = '___HYPHEN___';
   
@@ -44,6 +44,33 @@ export function cleanText(text: string): string {
 
   // Remove all remaining spaces
   result = result.replace(/\s+/g, '');
+
+  // Add hyphens before and after 3+ digit numbers that don't already have them
+  result = result.replace(/(\d{3,})/g, (match, digits, offset, string) => {
+    // Check if this number already has a hyphen marker before or after
+    const beforeStart = Math.max(0, offset - TEMP_HYPHEN.length);
+    const beforeText = string.substring(beforeStart, offset);
+    const hasHyphenBefore = beforeText.includes(TEMP_HYPHEN);
+    
+    const afterStart = offset + match.length;
+    const afterText = string.substring(afterStart, afterStart + TEMP_HYPHEN.length);
+    const hasHyphenAfter = afterText.includes(TEMP_HYPHEN);
+    
+    let before = '';
+    let after = '';
+    
+    // Add hyphen before if not already marked
+    if (!hasHyphenBefore) {
+      before = '-';
+    }
+    
+    // Add hyphen after if not already marked
+    if (!hasHyphenAfter) {
+      after = '-';
+    }
+    
+    return before + digits + after;
+  });
 
   // Restore preserved spaces (replace marker with single space)
   result = result.replace(new RegExp(TEMP_MARKER, 'g'), ' ');
@@ -372,7 +399,8 @@ export function parseMessageWithRulesAndSteps(
  * 1) Clean text (remove space if not between two numbers, enter, tab, Myanmar number to English, lower case)
  * 2) Convert strings based on string_conversion collection
  * 3) Convert the string based on parsing rules (replace rule names with numbers)
- * 4) Extract bet number and amount
+ * 4) Keep only digits, commas, and hyphens
+ * 5) Extract bet number and amount
  * 
  * @param message - The original message to parse
  * @param rules - Parsing rules (rule name -> numbers array)
@@ -385,7 +413,26 @@ export function parseMessageWithRules(
   minAmount: number = 100,
   conversionRules?: { from: string; to: string; enabled: boolean }[],
 ): Record<string, number> {
-  return parseMessageWithRulesAndSteps(message, rules, minAmount, conversionRules).bets;
+  if (!message) return {};
+
+  // Step 1: Clean text
+  let cleaned = cleanText(message);
+
+  // Step 2: Apply string conversion rules
+  if (conversionRules && conversionRules.length > 0) {
+    cleaned = applyStringConversions(cleaned, conversionRules);
+  }
+
+  // Step 3: Apply parsing rules (replace rule names with their numbers)
+  if (rules && rules.length > 0) {
+    cleaned = applyParsingRules(cleaned, rules);
+  }
+
+  // Step 4: Keep only digits, commas, and hyphens
+  cleaned = keepOnlyDigitsCommasHyphens(cleaned);
+
+  // Step 5: Extract bet number and amount
+  return extractBets(cleaned, minAmount);
 }
 
 /**
