@@ -5,6 +5,7 @@ import { MessageParser } from './components/MessageParser';
 import { SummaryView } from './components/SummaryView';
 import { ParsingRules } from './components/ParsingRules';
 import { TextConverter } from './components/TextConverter';
+import { ToastContainer } from './components/Toast';
 import { getUsers, createUser, deleteUser, addBetsToUser } from './services/api';
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'error' | 'info' }>>([]);
 
   console.log('App state:', { loading, usersCount: users.length });
 
@@ -68,6 +70,15 @@ function App() {
     await addBetsToUser(userId, bets);
     // Reload users to get updated data
     await loadUsers();
+  };
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
 
   if (loading) {
@@ -162,6 +173,7 @@ function App() {
                 selectedUserId={selectedUserId}
                 onUserIdChange={setSelectedUserId}
                 onAddBets={handleAddBets}
+                onShowToast={showToast}
               />
             )}
 
@@ -179,6 +191,7 @@ function App() {
           </div>
         </div>
       </div>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 }

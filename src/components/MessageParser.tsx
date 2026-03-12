@@ -17,6 +17,7 @@ interface MessageParserProps {
   selectedUserId: string;
   onUserIdChange: (userId: string) => void;
   onAddBets: (userId: string, bets: ParsedBet[]) => Promise<void>;
+  onShowToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
 export const MessageParser: React.FC<MessageParserProps> = ({
@@ -24,6 +25,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
   selectedUserId,
   onUserIdChange,
   onAddBets,
+  onShowToast,
 }) => {
   const [rawMessage, setRawMessage] = useState('');
   const [parsedBets, setParsedBets] = useState<ParsedBet[]>([]);
@@ -81,7 +83,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
 
   const handleParse = () => {
     if (!rawMessage.trim()) {
-      alert('Please enter a message to parse');
+      onShowToast('Please enter a message to parse', 'error');
       return;
     }
 
@@ -119,7 +121,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
       const errorMsg = hasRules
         ? 'No valid bets found. Try: "RuleName Amount" (e.g., "၁ပတ် 200") or "00 500"'
         : 'No valid bets found. Add parsing rules first, or use format: "00 500" or "19 200"';
-      alert(errorMsg);
+      onShowToast(errorMsg, 'error');
       return;
     }
 
@@ -214,6 +216,16 @@ export const MessageParser: React.FC<MessageParserProps> = ({
     }
   };
 
+  const handleAddRow = () => {
+    const newBet: ParsedBet = {
+      number: '00',
+      amount: 0,
+      message: '',
+      event: event,
+    };
+    setParsedBets([...parsedBets, newBet]);
+  };
+
   const handleBetSort = (field: BetSortField) => {
     if (betSortField === field) {
       setBetSortDirection(betSortDirection === 'asc' ? 'desc' : 'asc');
@@ -231,12 +243,12 @@ export const MessageParser: React.FC<MessageParserProps> = ({
 
   const handleAddBets = async () => {
     if (!selectedUserId || selectedUserId === '') {
-      alert('Please select a user first');
+      onShowToast('Please select a user first', 'error');
       return;
     }
 
     if (parsedBets.length === 0) {
-      alert('No bets to add. Please parse a message first.');
+      onShowToast('No bets to add. Please parse a message first.', 'error');
       return;
     }
 
@@ -246,9 +258,9 @@ export const MessageParser: React.FC<MessageParserProps> = ({
       setRawMessage('');
       setParsedBets([]);
       setPreprocessedText(null);
-      alert('Bets added successfully!');
+      onShowToast('Bets added successfully!', 'success');
     } catch (error) {
-      alert('Failed to add bets');
+      onShowToast('Failed to add bets', 'error');
     } finally {
       setAdding(false);
     }
@@ -400,6 +412,13 @@ export const MessageParser: React.FC<MessageParserProps> = ({
             <h3>
               Parsed Bets ({parsedBets.length}) - Total: {parsedBets.reduce((sum, bet) => sum + bet.amount, 0).toLocaleString()}
             </h3>
+            <button
+              className="btn btn-secondary"
+              onClick={handleAddRow}
+              title="Add new bet row"
+            >
+              ➕ Add Row
+            </button>
           </div>
           <div className="table-container">
             <table className="data-grid interactive-table">
