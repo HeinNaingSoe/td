@@ -208,7 +208,9 @@ export const MessageParser: React.FC<MessageParserProps> = ({
 
       {parsedBets.length > 0 && (
         <div className="parsed-bets-section">
-          <h3>Parsed Bets ({parsedBets.length})</h3>
+          <h3>
+            Parsed Bets ({parsedBets.length}) - Total: {parsedBets.reduce((sum, bet) => sum + bet.amount, 0).toLocaleString()}
+          </h3>
           <textarea
             value={parsedBets.map(bet => `${bet.number} - ${bet.amount}`).join('\n')}
             readOnly
