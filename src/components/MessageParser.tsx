@@ -338,7 +338,12 @@ export const MessageParser: React.FC<MessageParserProps> = ({
                       <input
                         type="number"
                         value={bet.amount}
-                        onChange={(e) => handleBetChange(bet.id, 'amount', parseInt(e.target.value) || 0)}
+                        onChange={(e) => {
+                          const raw = e.target.value || '';
+                          const normalized = raw.replace(/^0+(?=\d)/, '');
+                          const amt = normalized === '' ? 0 : parseInt(normalized, 10);
+                          handleBetChange(bet.id, 'amount', isNaN(amt) ? 0 : amt);
+                        }}
                         className="cell-input"
                         style={{ width: '120px' }}
                       />
