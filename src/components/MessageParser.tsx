@@ -3,15 +3,6 @@ import { User, ParsedBet, ParsingRule, ConversionRule, EventType } from '../type
 import { parseMessageWithRulesAndSteps } from '../utils/parser';
 import { getParsingRules, getStringConversionRules } from '../services/api';
 
-type BetSortField = 'number' | 'amount';
-type SortDirection = 'asc' | 'desc';
-type Operator = '=' | '>' | '>=' | '<' | '<=';
-
-interface NumericFilter {
-  operator: Operator;
-  value: string;
-}
-
 interface MessageParserProps {
   users: User[];
   selectedUserId: string;
@@ -52,12 +43,6 @@ export const MessageParser: React.FC<MessageParserProps> = ({
       setUserSearch(selectedUserId);
     }
   }, [selectedUserId]);
-
-  // Parsed bets table state
-  const [betSortField, setBetSortField] = useState<BetSortField>('number');
-  const [betSortDirection, setBetSortDirection] = useState<SortDirection>('asc');
-  const [betNumberFilter, setBetNumberFilter] = useState('');
-  const [betAmountFilter, setBetAmountFilter] = useState<NumericFilter>({ operator: '=', value: '' });
 
   useEffect(() => {
     const loadRules = async () => {
@@ -146,54 +131,6 @@ export const MessageParser: React.FC<MessageParserProps> = ({
     return users.filter(user => user._id.toLowerCase().includes(searchLower));
   }, [users, userSearch]);
 
-  // Filtered and sorted parsed bets
-  const filteredParsedBets = useMemo(() => {
-    let filtered = [...parsedBets];
-
-    // Apply number filter
-    if (betNumberFilter.trim()) {
-      const searchLower = betNumberFilter.toLowerCase();
-      filtered = filtered.filter(bet => bet.number.includes(searchLower));
-    }
-
-    // Apply amount filter
-    if (betAmountFilter.value.trim()) {
-      const filterValue = parseFloat(betAmountFilter.value);
-      if (!isNaN(filterValue)) {
-        filtered = filtered.filter(bet => {
-          switch (betAmountFilter.operator) {
-            case '=':
-              return bet.amount === filterValue;
-            case '>':
-              return bet.amount > filterValue;
-            case '>=':
-              return bet.amount >= filterValue;
-            case '<':
-              return bet.amount < filterValue;
-            case '<=':
-              return bet.amount <= filterValue;
-            default:
-              return true;
-          }
-        });
-      }
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      let aVal: any, bVal: any;
-      if (betSortField === 'number') {
-        aVal = parseInt(a.number, 10);
-        bVal = parseInt(b.number, 10);
-      } else {
-        aVal = a.amount;
-        bVal = b.amount;
-      }
-      return betSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-    });
-
-    return filtered;
-  }, [parsedBets, betNumberFilter, betAmountFilter, betSortField, betSortDirection]);
 
   const handleBetChange = (betNumber: string, betAmount: number, field: 'number' | 'amount', value: string | number) => {
     const updated = parsedBets.map(bet => {
@@ -226,15 +163,6 @@ export const MessageParser: React.FC<MessageParserProps> = ({
     setParsedBets([...parsedBets, newBet]);
   };
 
-  const handleBetSort = (field: BetSortField) => {
-    if (betSortField === field) {
-      setBetSortDirection(betSortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setBetSortField(field);
-      setBetSortDirection('asc');
-    }
-  };
-
   const handleUserSelect = (userId: string) => {
     onUserIdChange(userId);
     setUserSearch(userId);
@@ -264,40 +192,6 @@ export const MessageParser: React.FC<MessageParserProps> = ({
     } finally {
       setAdding(false);
     }
-  };
-
-  const SortIcon: React.FC<{ field: BetSortField; currentField: BetSortField; direction: SortDirection }> = ({ field, currentField, direction }) => {
-    if (field !== currentField) return <span style={{ opacity: 0.3 }}>⇅</span>;
-    return direction === 'asc' ? <span>↑</span> : <span>↓</span>;
-  };
-
-  const NumericFilterInput: React.FC<{
-    filter: NumericFilter;
-    onChange: (filter: NumericFilter) => void;
-    placeholder?: string;
-  }> = ({ filter, onChange, placeholder = 'Value...' }) => {
-    return (
-      <div className="numeric-filter">
-        <select
-          value={filter.operator}
-          onChange={(e) => onChange({ ...filter, operator: e.target.value as Operator })}
-          className="operator-select"
-        >
-          <option value="=">=</option>
-          <option value=">">&gt;</option>
-          <option value=">=">&gt;=</option>
-          <option value="<">&lt;</option>
-          <option value="<=">&lt;=</option>
-        </select>
-        <input
-          type="number"
-          value={filter.value}
-          onChange={(e) => onChange({ ...filter, value: e.target.value })}
-          placeholder={placeholder}
-          className="numeric-filter-input"
-        />
-      </div>
-    );
   };
 
   return (
@@ -424,36 +318,13 @@ export const MessageParser: React.FC<MessageParserProps> = ({
             <table className="data-grid interactive-table">
               <thead>
                 <tr>
-                  <th onClick={() => handleBetSort('number')} className="sortable">
-                    Bet Number <SortIcon field="number" currentField={betSortField} direction={betSortDirection} />
-                  </th>
-                  <th onClick={() => handleBetSort('amount')} className="sortable">
-                    Amount <SortIcon field="amount" currentField={betSortField} direction={betSortDirection} />
-                  </th>
+                  <th>Bet Number</th>
+                  <th>Amount</th>
                   <th>Actions</th>
-                </tr>
-                <tr className="filter-row">
-                  <th>
-                    <input
-                      type="text"
-                      placeholder="🔍 Filter..."
-                      value={betNumberFilter}
-                      onChange={(e) => setBetNumberFilter(e.target.value)}
-                      className="column-filter-input"
-                    />
-                  </th>
-                  <th>
-                    <NumericFilterInput
-                      filter={betAmountFilter}
-                      onChange={setBetAmountFilter}
-                      placeholder="Amount..."
-                    />
-                  </th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredParsedBets.map((bet, idx) => (
+                {parsedBets.map((bet, idx) => (
                   <tr key={`${bet.number}-${bet.amount}-${idx}`}>
                     <td>
                       <input
