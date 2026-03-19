@@ -337,7 +337,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
                     <td>
                       <input
                         type="number"
-                        value={bet.amount}
+                        value={bet.amount === 0 ? '' : bet.amount}
                         onChange={(e) => {
                           const raw = e.target.value || '';
                           const normalized = raw.replace(/^0+(?=\d)/, '');
@@ -346,6 +346,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
                         }}
                         className="cell-input"
                         style={{ width: '120px' }}
+                        placeholder="Amount..."
                       />
                     </td>
                     <td>
