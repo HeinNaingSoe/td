@@ -19,7 +19,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
   onShowToast,
 }) => {
   const [rawMessage, setRawMessage] = useState('');
-  const [parsedBets, setParsedBets] = useState<ParsedBet[]>([]);
+  const [parsedBets, setParsedBets] = useState<(ParsedBet & { id: string })[]>([]);
   const [adding, setAdding] = useState(false);
   const [rules, setRules] = useState<ParsingRule[]>([]);
   const [rulesLoading, setRulesLoading] = useState(false);
@@ -110,9 +110,10 @@ export const MessageParser: React.FC<MessageParserProps> = ({
       return;
     }
 
-    const bets: ParsedBet[] = Object.entries(mapping)
+    const bets: (ParsedBet & { id: string })[] = Object.entries(mapping)
       .filter(([_, amount]) => amount > 0)
       .map(([number, amount]) => ({
+        id: `${Date.now()}-${Math.random()}`,
         number: number.padStart(2, '0'),
         amount: amount as number,
         message: rawMessage,
@@ -132,10 +133,9 @@ export const MessageParser: React.FC<MessageParserProps> = ({
   }, [users, userSearch]);
 
 
-  const handleBetChange = (betNumber: string, betAmount: number, field: 'number' | 'amount', value: string | number) => {
+  const handleBetChange = (betId: string, field: 'number' | 'amount', value: string | number) => {
     const updated = parsedBets.map(bet => {
-      // Find the bet by matching both number and amount (to handle duplicates)
-      if (bet.number === betNumber && bet.amount === betAmount) {
+      if (bet.id === betId) {
         return { ...bet, [field]: value };
       }
       return bet;
@@ -143,18 +143,14 @@ export const MessageParser: React.FC<MessageParserProps> = ({
     setParsedBets(updated);
   };
 
-  const handleDeleteBet = (betNumber: string, betAmount: number) => {
-    // Remove the first matching bet (in case of duplicates)
-    const index = parsedBets.findIndex(bet => bet.number === betNumber && bet.amount === betAmount);
-    if (index !== -1) {
-      const updated = [...parsedBets];
-      updated.splice(index, 1);
-      setParsedBets(updated);
-    }
+  const handleDeleteBet = (betId: string) => {
+    const updated = parsedBets.filter(bet => bet.id !== betId);
+    setParsedBets(updated);
   };
 
   const handleAddRow = () => {
-    const newBet: ParsedBet = {
+    const newBet: ParsedBet & { id: string } = {
+      id: `${Date.now()}-${Math.random()}`,
       number: '00',
       amount: 0,
       message: '',
@@ -182,7 +178,9 @@ export const MessageParser: React.FC<MessageParserProps> = ({
 
     setAdding(true);
     try {
-      await onAddBets(selectedUserId, parsedBets);
+      // Remove the id field before sending to API
+      const betsToAdd: ParsedBet[] = parsedBets.map(({ id, ...bet }) => bet);
+      await onAddBets(selectedUserId, betsToAdd);
       setRawMessage('');
       setParsedBets([]);
       setPreprocessedText(null);
@@ -324,13 +322,13 @@ export const MessageParser: React.FC<MessageParserProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {parsedBets.map((bet, idx) => (
-                  <tr key={`${bet.number}-${bet.amount}-${idx}`}>
+                {parsedBets.map((bet) => (
+                  <tr key={bet.id}>
                     <td>
                       <input
                         type="text"
                         value={bet.number}
-                        onChange={(e) => handleBetChange(bet.number, bet.amount, 'number', e.target.value)}
+                        onChange={(e) => handleBetChange(bet.id, 'number', e.target.value)}
                         className="cell-input"
                         maxLength={2}
                         style={{ width: '80px' }}
@@ -340,7 +338,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
                       <input
                         type="number"
                         value={bet.amount}
-                        onChange={(e) => handleBetChange(bet.number, bet.amount, 'amount', parseInt(e.target.value) || 0)}
+                        onChange={(e) => handleBetChange(bet.id, 'amount', parseInt(e.target.value) || 0)}
                         className="cell-input"
                         style={{ width: '120px' }}
                       />
@@ -348,7 +346,7 @@ export const MessageParser: React.FC<MessageParserProps> = ({
                     <td>
                       <button
                         className="btn btn-danger btn-small"
-                        onClick={() => handleDeleteBet(bet.number, bet.amount)}
+                        onClick={() => handleDeleteBet(bet.id)}
                         title="Remove bet"
                       >
                         🗑️
